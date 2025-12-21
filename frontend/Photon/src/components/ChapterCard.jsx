@@ -1,12 +1,15 @@
 import React from 'react';
 
-const ChapterCard = ({ title, status, progress, locked }) => {
+const ChapterCard = ({ title, status, progress, locked, onClick }) => {
   const isCompleted = status === 'Completed';
   const isWeak = status === 'Weak';
   const isLocked = locked;
   
   return (
-    <div className={`bg-white rounded-xl p-5 border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-1 h-full flex flex-col ${isLocked ? 'opacity-70 grayscale-[0.5]' : ''}`}>
+    <div 
+      onClick={onClick}
+      className={`bg-white rounded-xl p-5 border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-1 h-full flex flex-col ${isLocked ? 'opacity-70 grayscale-[0.5] cursor-not-allowed' : 'cursor-pointer'}`}
+    >
       <div className="flex justify-between items-start mb-4">
         <h4 className="font-bold text-lg text-primary font-bangla leading-tight">{title}</h4>
         {isCompleted && (

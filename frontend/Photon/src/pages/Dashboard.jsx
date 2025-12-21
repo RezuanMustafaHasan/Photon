@@ -4,7 +4,7 @@ import AISuggestionCard from '../components/AISuggestionCard';
 import ProgressCard from '../components/ProgressCard';
 import ChapterGrid from '../components/ChapterGrid';
 
-const Dashboard = () => {
+const Dashboard = ({ onChapterClick }) => {
   return (
     <div className="min-h-screen bg-background pb-12">
       <Navbar />
@@ -24,7 +24,7 @@ const Dashboard = () => {
         </div>
 
         {/* Chapters Section */}
-        <ChapterGrid />
+        <ChapterGrid onChapterClick={onChapterClick} />
       </main>
     </div>
   );

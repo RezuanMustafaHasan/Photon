@@ -1,7 +1,7 @@
 import React from 'react';
 import ChapterCard from './ChapterCard';
 
-const ChapterGrid = () => {
+const ChapterGrid = ({ onChapterClick }) => {
   const chapters = [
     { title: 'ভেক্টর', status: 'Completed', progress: 100 },
     { title: 'নিউটনের বলবিদ্যা', progress: 45 },
@@ -17,7 +17,7 @@ const ChapterGrid = () => {
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         {chapters.map((chapter, index) => (
-          <ChapterCard key={index} {...chapter} />
+          <ChapterCard key={index} {...chapter} onClick={() => !chapter.locked && onChapterClick(chapter.title)} />
         ))}
       </div>
     </div>
