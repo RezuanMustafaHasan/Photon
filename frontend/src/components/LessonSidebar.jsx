@@ -17,20 +17,20 @@ const LessonSidebar = () => {
   ];
 
   return (
-    <div className="h-full flex flex-col bg-white border-r border-gray-100">
+    <div className="h-100 d-flex flex-column bg-white border-end border-gray-100">
       {/* Sidebar Header */}
-      <div className="p-6 border-b border-gray-100 bg-white sticky top-0 z-10">
-        <h2 className="text-xl font-bold text-primary font-bangla mb-3">নিউটনের বলবিদ্যা</h2>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-accent w-[45%] rounded-full"></div>
+      <div className="p-4 border-bottom border-gray-100 bg-white sticky-top z-1">
+        <h2 className="fs-5 fw-bold text-primary font-bangla mb-3">নিউটনের বলবিদ্যা</h2>
+        <div className="d-flex align-items-center gap-2">
+          <div className="flex-grow-1 bg-gray-100 rounded-pill overflow-hidden" style={{ height: '0.375rem' }}>
+            <div className="h-100 bg-accent rounded-pill" style={{ width: '45%' }}></div>
           </div>
-          <span className="text-xs font-bold text-secondary">45%</span>
+          <span className="text-xs fw-bold text-secondary">45%</span>
         </div>
       </div>
 
       {/* Lesson List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+      <div className="flex-grow-1 overflow-y-auto p-3 vstack gap-1 custom-scrollbar">
         {lessons.map((lesson, index) => (
           <LessonItem 
             key={index} 

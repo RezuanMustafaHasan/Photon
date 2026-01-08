@@ -11,13 +11,15 @@ const ChapterGrid = ({ onChapterClick }) => {
   ];
 
   return (
-    <div className="mt-10">
-      <h2 className="text-xl font-bold text-primary mb-6 flex items-center gap-2">
+    <div className="mt-5">
+      <h2 className="fs-5 fw-bold text-primary mb-4 d-flex align-items-center gap-2">
         📘 HSC Physics Chapters
       </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+      <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-4 row-cols-xl-5 g-4">
         {chapters.map((chapter, index) => (
-          <ChapterCard key={index} {...chapter} onClick={() => !chapter.locked && onChapterClick(chapter.title)} />
+          <div key={index} className="col">
+            <ChapterCard {...chapter} onClick={() => !chapter.locked && onChapterClick(chapter.title)} />
+          </div>
         ))}
       </div>
     </div>

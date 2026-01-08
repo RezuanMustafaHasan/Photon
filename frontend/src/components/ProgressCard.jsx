@@ -6,8 +6,8 @@ const ProgressRing = ({ value, size = 100, strokeWidth = 8 }) => {
   const offset = circumference - (value / 100) * circumference;
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="transform -rotate-90">
+    <div className="position-relative d-flex align-items-center justify-content-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="rotate-n90">
         {/* Background circle */}
         <circle
           stroke="#E2E8F0"
@@ -29,10 +29,11 @@ const ProgressRing = ({ value, size = 100, strokeWidth = 8 }) => {
           cx={size / 2}
           cy={size / 2}
           className="transition-all duration-1000 ease-out"
+          style={{ transition: 'stroke-dashoffset 1s ease-out' }}
         />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xl font-bold text-primary">{value}%</span>
+      <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center">
+        <span className="fs-5 fw-bold text-primary">{value}%</span>
       </div>
     </div>
   );
@@ -40,26 +41,26 @@ const ProgressRing = ({ value, size = 100, strokeWidth = 8 }) => {
 
 const ProgressCard = () => {
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-row items-center gap-6 h-full hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 d-flex flex-row align-items-center gap-4 h-100 card-hover-effect">
       <div className="flex-shrink-0">
         <ProgressRing value={80} />
       </div>
-      <div className="flex-1 space-y-3 w-full">
-        <h3 className="text-lg font-bold text-primary flex items-center gap-2">
+      <div className="flex-1 vstack gap-3 w-100">
+        <h3 className="text-lg-custom fw-bold text-primary d-flex align-items-center gap-2">
           📈 Your Progress
         </h3>
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
+        <div className="vstack gap-2">
+          <div className="d-flex justify-content-between small">
             <span className="text-secondary">Syllabus completed</span>
-            <span className="font-semibold text-primary">80%</span>
+            <span className="fw-semibold text-primary">80%</span>
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="d-flex justify-content-between small">
             <span className="text-secondary">Consistency</span>
-            <span className="font-semibold text-accent">Good</span>
+            <span className="fw-semibold text-accent">Good</span>
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="d-flex justify-content-between small">
             <span className="text-secondary">Weekly streak</span>
-            <span className="font-semibold text-primary">5 days</span>
+            <span className="fw-semibold text-primary">5 days</span>
           </div>
         </div>
       </div>

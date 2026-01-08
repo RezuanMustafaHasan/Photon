@@ -6,19 +6,19 @@ import ChapterGrid from '../components/ChapterGrid';
 
 const Dashboard = ({ onChapterClick }) => {
   return (
-    <div className="min-h-screen bg-background pb-12">
+    <div className="min-h-screen bg-background pb-5">
       <Navbar />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <main className="container-xl px-4 px-sm-5 py-5">
         {/* Top Section: AI Suggestion & Progress */}
-        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="row g-4 mb-4">
           {/* AI Suggestion Card (approx 65% width) */}
-          <div className="lg:w-[65%]">
+          <div className="col-lg-8">
             <AISuggestionCard />
           </div>
           
           {/* Progress Card (approx 35% width) */}
-          <div className="lg:w-[35%]">
+          <div className="col-lg-4">
             <ProgressCard />
           </div>
         </div>
