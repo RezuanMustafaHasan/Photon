@@ -158,6 +158,14 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.25rem !important;
 }
 
+.text-gradient-custom {
+  background: linear-gradient(to right, var(--color-cta-start), var(--color-cta-end));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
 /* Chat & Sidebar specific */
 .backdrop-blur-sm {
   backdrop-filter: blur(4px);
