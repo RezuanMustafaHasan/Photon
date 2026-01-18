@@ -19,6 +19,56 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.scroll-section {
+  scroll-margin-top: 96px;
+}
+
+.auth-shell {
+  background-color: #FFFBF0;
+}
+
+.auth-card {
+  box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.06), 0 4px 6px -2px rgba(15, 23, 42, 0.04);
+}
+
+.auth-input {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.auth-input:focus {
+  border-color: var(--color-orange-300) !important;
+  box-shadow: 0 0 0 0.2rem rgba(253, 186, 116, 0.35) !important;
+}
+
+.auth-primary-btn {
+  background: linear-gradient(to right, var(--color-cta-start), var(--color-cta-end));
+  border: none;
+  box-shadow: 0 10px 15px -3px rgba(254, 215, 170, 0.5), 0 4px 6px -2px rgba(254, 215, 170, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+}
+
+.auth-primary-btn:hover {
+  box-shadow: 0 20px 25px -5px rgba(253, 186, 116, 0.5), 0 8px 10px -6px rgba(253, 186, 116, 0.5);
+  transform: translateY(-0.125rem);
+}
+
+.auth-primary-btn:disabled {
+  filter: grayscale(0.2);
+  opacity: 0.8;
+  transform: none;
+}
+
+.auth-link {
+  color: #F97316;
+  text-decoration: none;
+}
+
+.auth-link:hover {
+  color: #EA580C;
+  text-decoration: underline;
+}
+
 h1, h2, h3, h4, h5, h6 {
   font-weight: 700;
 }
@@ -39,6 +89,10 @@ h1, h2, h3, h4, h5, h6 {
 
 .bg-orange-50 {
   background-color: var(--color-orange-50);
+}
+
+.bg-background {
+  background-color: var(--color-background) !important;
 }
 
 .border-orange-100 {

@@ -1,6 +1,12 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 const Navbar = () => {
+  const navigate = useNavigate();
+  const auth = useAuth();
+  const displayName = auth.user?.name ? auth.user.name.split(' ')[0] : auth.user?.email || 'User';
+
   return (
     <nav className="d-flex align-items-center justify-content-between px-4 py-3 bg-white border-bottom border-gray-100 shadow-sm sticky-top z-50">
       {/* Left: Logo */}
@@ -21,8 +27,15 @@ const Navbar = () => {
 
       {/* Right: User */}
       <div className="d-flex align-items-center gap-4">
-        <span className="d-none d-sm-block small fw-medium text-secondary">Hi, Hasan</span>
-        <button className="px-4 py-1 small fw-medium text-secondary border border-gray-200 rounded-pill bg-white hover-bg-gray-50 transition-colors">
+        <span className="d-none d-sm-block small fw-medium text-secondary">Hi, {displayName}</span>
+        <button
+          type="button"
+          onClick={() => {
+            auth.logout();
+            navigate('/');
+          }}
+          className="px-4 py-1 small fw-medium text-secondary border border-gray-200 rounded-pill bg-white hover-bg-gray-50 transition-colors"
+        >
           Logout
         </button>
       </div>
