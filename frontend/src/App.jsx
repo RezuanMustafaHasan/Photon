@@ -1,11 +1,11 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useParams, Navigate, useLocation, Link } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams, Navigate } from 'react-router-dom';
+import { useAuth } from './auth/AuthContext.jsx';
 import Dashboard from './pages/Dashboard';
 import ChapterChat from './pages/ChapterChat';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import { useAuth } from './auth/AuthContext.jsx';
 
 function ChapterChatRoute() {
   const navigate = useNavigate();
@@ -23,43 +23,45 @@ function ChapterChatRoute() {
   );
 }
 
-function RequireAuth({ children }) {
-  const auth = useAuth();
-  const location = useLocation();
-  if (!auth.isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, isHydrating } = useAuth();
+  if (isHydrating) {
+    return (
+      <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: '#FFF7ED' }}>
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
+          <div className="fw-bold text-primary mb-1">Loading…</div>
+          <div className="text-secondary small">Checking your session</div>
+        </div>
+      </div>
+    );
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/landing" replace />;
   }
   return children;
 }
 
-function ForgotPassword() {
-  return (
-    <div className="auth-shell min-h-screen d-flex align-items-center py-5">
-      <div className="container">
-        <div className="row justify-content-center">
-          <div className="col-12 col-sm-10 col-md-8 col-lg-5">
-            <div className="auth-card bg-white border border-gray-100 rounded-2xl p-4 p-sm-5 shadow-sm text-center">
-              <div className="d-flex align-items-center justify-content-center mb-4">
-                <div className="rounded-3 bg-gradient-logo d-flex align-items-center justify-content-center text-white fw-bold shadow-sm me-2" style={{ width: '2.25rem', height: '2.25rem' }}>
-                  P
-                </div>
-                <span className="fs-4 fw-bold text-primary tracking-tight">Photon</span>
-              </div>
-              <h1 className="h3 fw-bold text-primary mb-2">Forgot password</h1>
-              <p className="text-secondary mb-4">Password reset will be available soon.</p>
-              <Link to="/login" className="btn auth-primary-btn rounded-pill px-4 py-2 fw-bold">
-                Back to Login
-              </Link>
-            </div>
-          </div>
+function HomeRedirect() {
+  const { isAuthenticated, isHydrating } = useAuth();
+  if (isHydrating) {
+    return (
+      <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: '#FFF7ED' }}>
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
+          <div className="fw-bold text-primary mb-1">Loading…</div>
+          <div className="text-secondary small">Checking your session</div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+  return <Navigate to={isAuthenticated ? '/dashboard' : '/landing'} replace />;
 }
 
 function App() {
   const navigate = useNavigate();
+
+  const handleLogin = () => {
+    navigate('/dashboard');
+  };
 
   const handleChapterClick = (chapterTitle) => {
     navigate(`/chapter/${encodeURIComponent(chapterTitle)}`);
@@ -67,24 +69,24 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<HomeRedirect />} />
+      <Route path="/landing" element={<LandingPage onLogin={handleLogin} />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route
         path="/dashboard"
         element={
-          <RequireAuth>
+          <ProtectedRoute>
             <Dashboard onChapterClick={handleChapterClick} />
-          </RequireAuth>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/chapter/:chapterTitle"
         element={
-          <RequireAuth>
+          <ProtectedRoute>
             <ChapterChatRoute />
-          </RequireAuth>
+          </ProtectedRoute>
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -4,18 +4,21 @@ import { useAuth } from '../auth/AuthContext.jsx';
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const auth = useAuth();
-  const displayName = auth.user?.name ? auth.user.name.split(' ')[0] : auth.user?.email || 'User';
+  const { user, logout } = useAuth();
 
   return (
     <nav className="d-flex align-items-center justify-content-between px-4 py-3 bg-white border-bottom border-gray-100 shadow-sm sticky-top z-50">
       {/* Left: Logo */}
-      <div className="d-flex align-items-center gap-2">
+      <button
+        type="button"
+        onClick={() => navigate('/dashboard')}
+        className="d-flex align-items-center gap-2 border-0 bg-transparent p-0"
+      >
         <div className="rounded-3 bg-gradient-logo d-flex align-items-center justify-content-center text-white fw-bold shadow-sm" style={{ width: '2rem', height: '2rem' }}>
           P
         </div>
         <span className="fs-5 fw-bold text-primary tracking-tight">Photon</span>
-      </div>
+      </button>
 
       {/* Center: Nav Items */}
       <div className="d-none d-md-flex align-items-center gap-1 bg-gray-50 p-1 rounded-pill border border-gray-100">
@@ -27,12 +30,14 @@ const Navbar = () => {
 
       {/* Right: User */}
       <div className="d-flex align-items-center gap-4">
-        <span className="d-none d-sm-block small fw-medium text-secondary">Hi, {displayName}</span>
+        <span className="d-none d-sm-block small fw-medium text-secondary">
+          Hi, {user?.name || 'Student'}
+        </span>
         <button
           type="button"
           onClick={() => {
-            auth.logout();
-            navigate('/');
+            logout();
+            navigate('/landing');
           }}
           className="px-4 py-1 small fw-medium text-secondary border border-gray-200 rounded-pill bg-white hover-bg-gray-50 transition-colors"
         >
