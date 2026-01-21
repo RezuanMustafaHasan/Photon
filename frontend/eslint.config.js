@@ -24,11 +24,6 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
-    },
-  },
-  {
-    files: ['src/auth/**/*.{js,jsx}'],
-    rules: {
       'react-refresh/only-export-components': 'off',
     },
   },
