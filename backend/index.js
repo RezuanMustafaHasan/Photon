@@ -9,6 +9,8 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
+const FASTAPI_CHAT_URL = process.env.FASTAPI_CHAT_URL || 'http://localhost:8000/chat';
 
 app.use(cors({ origin: true }));
 app.use(express.json());
