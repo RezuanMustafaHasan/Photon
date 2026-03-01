@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 
 const ChatWindow = () => {
   const { token } = useAuth();
+  const system = 'Use Markdown. Render all math using LaTeX: inline $...$, block $$...$$. Use Markdown tables for comparisons.';
   const [messages, setMessages] = useState(() => ([
     {
       id: crypto.randomUUID(),
@@ -45,7 +46,7 @@ const ChatWindow = () => {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, system }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
