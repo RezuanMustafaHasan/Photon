@@ -9,8 +9,8 @@ const app = express();
 const PORT = process.env.PORT || 5050;
 const USERS_FILE = path.join(__dirname, 'db', 'users.json');
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hsc_physics_db';
-const MAIN_COLLECTION = 'main-book';
-const MAIN_DOC_ID = 'main-book';
+const MAIN_COLLECTION = 'main_book';
+const MAIN_DOC_ID = 'main_book';
 
 const upload = multer({
   storage: multer.memoryStorage(),

@@ -190,8 +190,8 @@ const ContentsPage = () => {
         <div className="card-section">
           <div className="section-header">
             <div>
-              <div className="section-title">Collection: main-book</div>
-              <div className="muted small">Uploads are stored in main-book</div>
+              <div className="section-title">Collection: main_book</div>
+              <div className="muted small">Uploads are stored in main_book</div>
             </div>
           </div>
           {status === 'loading' && <p className="muted">Loading…</p>}
@@ -210,7 +210,7 @@ const ContentsPage = () => {
         <div className="card-section">
           <div className="section-title">Upload JSON</div>
           <input type="file" accept=".json,application/json" onChange={(event) => setUploadFile(event.target.files[0] || null)} />
-          <button className="primary" onClick={handleUpload} disabled={!uploadFile}>Upload to main-book</button>
+          <button className="primary" onClick={handleUpload} disabled={!uploadFile}>Upload to main_book</button>
         </div>
         <div className="card-section">
           <div className="section-title">Edit JSON</div>
