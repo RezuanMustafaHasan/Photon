@@ -11,7 +11,7 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
       <main className="flex-grow-1 d-flex overflow-hidden position-relative">
         {/* Left Sidebar - Fixed Width & Scrollable */}
         <div className="d-none d-lg-block w-sidebar-lg w-sidebar-xl h-100 flex-shrink-0 border-end border-gray-100 bg-white">
-          <LessonSidebar />
+          <LessonSidebar chapterTitle={chapterTitle} />
         </div>
         
         {/* Right Chat Area - Flex Grow & Independent Scroll */}

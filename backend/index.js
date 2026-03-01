@@ -11,6 +11,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 const FASTAPI_CHAT_URL = process.env.FASTAPI_CHAT_URL || 'http://localhost:8000/chat';
+const MAIN_COLLECTION = 'main_book';
+const MAIN_DOC_ID = 'main_book';
 
 app.use(cors({ origin: true }));
 app.use(express.json());
@@ -57,6 +59,15 @@ app.post('/api/chat', async (req, res) => {
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/hsc_physics_db')
   .then(() => console.log('MongoDB Connected'))
   .catch(err => console.error('MongoDB connection error:', err));
+
+const getDb = async () => {
+  if (mongoose.connection.readyState !== 1) {
+    await mongoose.connection.asPromise();
+  }
+  return mongoose.connection.db;
+};
+
+const normalizeTitle = (value) => String(value || '').trim().toLowerCase();
 
 const userSchema = new mongoose.Schema(
   {
@@ -172,6 +183,58 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     res.json({ id: user._id.toString(), name: user.name, email: user.email });
   } catch {
     res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+app.get('/api/chapters', async (req, res) => {
+  try {
+    const db = await getDb();
+    const doc = await db.collection(MAIN_COLLECTION).findOne({ _id: MAIN_DOC_ID });
+    const items = Array.isArray(doc?.items) ? doc.items : [];
+    const chapters = items.map((item) => {
+      const source = item?.content && typeof item.content === 'object' ? item.content : item;
+      const chapterName = source?.chapter_name || item?.name || '';
+      const chapterNameBn = source?.chapter_name_bn || source?.chapter_name || chapterName;
+      return {
+        chapter_name: chapterName,
+        chapter_name_bn: chapterNameBn,
+      };
+    }).filter((chapter) => chapter.chapter_name_bn);
+    res.json({ chapters });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to load chapters' });
+  }
+});
+
+app.get('/api/chapters/:chapterTitle/lessons', async (req, res) => {
+  try {
+    const title = req.params.chapterTitle;
+    if (!title) {
+      res.status(400).json({ message: 'chapterTitle is required' });
+      return;
+    }
+    const db = await getDb();
+    const doc = await db.collection(MAIN_COLLECTION).findOne({ _id: MAIN_DOC_ID });
+    const items = Array.isArray(doc?.items) ? doc.items : [];
+    const target = normalizeTitle(title);
+    const match = items.find((item) => {
+      const source = item?.content && typeof item.content === 'object' ? item.content : item;
+      return [source?.chapter_name, source?.chapter_name_bn, item?.name].some((name) => normalizeTitle(name) === target);
+    });
+    if (!match) {
+      res.status(404).json({ message: 'Chapter not found' });
+      return;
+    }
+    const source = match?.content && typeof match.content === 'object' ? match.content : match;
+    let lessons = [];
+    if (Array.isArray(source?.lessons)) {
+      lessons = source.lessons.map((lesson) => lesson?.lesson_name || lesson?.lesson_name_bn || lesson?.lesson_title || '').filter(Boolean);
+    } else if (Array.isArray(source?.lesson_boundaries)) {
+      lessons = source.lesson_boundaries.filter(Boolean);
+    }
+    res.json({ lessons });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to load lessons' });
   }
 });
 

@@ -1,26 +1,49 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import LessonItem from './LessonItem';
 
-const LessonSidebar = () => {
-  const lessons = [
-    { title: 'বলের সংজ্ঞা ও প্রকারভেদ', isCompleted: true },
-    { title: 'নিউটনের প্রথম সূত্র', isCompleted: true },
-    { title: 'নিউটনের দ্বিতীয় সূত্র', isCompleted: true },
-    { title: 'নিউটনের তৃতীয় সূত্র', isCompleted: false, isActive: true },
-    { title: 'ঘর্ষণ', isCompleted: false },
-    { title: 'বাস্তব জীবনের প্রয়োগ', isCompleted: false },
-    { title: 'গাণিতিক সমস্যা ১', isCompleted: false },
-    { title: 'গাণিতিক সমস্যা ২', isCompleted: false },
-    { title: 'বোর্ড পরীক্ষার প্রশ্ন সমাধান', isCompleted: false },
-    { title: 'সৃজনশীল প্রশ্ন অনুশীলন', isCompleted: false },
-    { title: 'MCQ প্র্যাকটিস', isCompleted: false },
-  ];
+const LessonSidebar = ({ chapterTitle }) => {
+  const [lessons, setLessons] = useState([]);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    const loadLessons = async () => {
+      if (!chapterTitle) {
+        setLessons([]);
+        setStatus('idle');
+        return;
+      }
+      setStatus('loading');
+      setError('');
+      try {
+        const response = await fetch(`/api/chapters/${encodeURIComponent(chapterTitle)}/lessons`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to load lessons');
+        }
+        if (mounted) {
+          const items = Array.isArray(data.lessons) ? data.lessons : [];
+          setLessons(items);
+          setStatus('ready');
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err.message);
+          setStatus('error');
+        }
+      }
+    };
+    loadLessons();
+    return () => {
+      mounted = false;
+    };
+  }, [chapterTitle]);
 
   return (
     <div className="h-100 d-flex flex-column bg-white border-end border-gray-100">
-      {/* Sidebar Header */}
       <div className="p-4 border-bottom border-gray-100 bg-white sticky-top z-1">
-        <h2 className="fs-5 fw-bold text-primary font-bangla mb-3">নিউটনের বলবিদ্যা</h2>
+        <h2 className="fs-5 fw-bold text-primary font-bangla mb-3">{chapterTitle || 'Chapter'}</h2>
         <div className="d-flex align-items-center gap-2">
           <div className="flex-grow-1 bg-gray-100 rounded-pill overflow-hidden" style={{ height: '0.375rem' }}>
             <div className="h-100 bg-accent rounded-pill" style={{ width: '45%' }}></div>
@@ -29,14 +52,16 @@ const LessonSidebar = () => {
         </div>
       </div>
 
-      {/* Lesson List */}
       <div className="flex-grow-1 overflow-y-auto p-3 vstack gap-1 custom-scrollbar">
-        {lessons.map((lesson, index) => (
-          <LessonItem 
-            key={index} 
-            title={lesson.title} 
-            isCompleted={lesson.isCompleted} 
-            isActive={lesson.isActive} 
+        {status === 'error' && <div className="text-danger px-2">{error}</div>}
+        {status === 'loading' && <div className="text-secondary px-2">Loading…</div>}
+        {status !== 'loading' && !lessons.length && !error && <div className="text-secondary px-2">No lessons yet</div>}
+        {lessons.map((title, index) => (
+          <LessonItem
+            key={`${title}-${index}`}
+            title={title}
+            isCompleted={false}
+            isActive={index === 0}
           />
         ))}
       </div>
