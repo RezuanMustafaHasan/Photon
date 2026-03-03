@@ -29,6 +29,9 @@ def root():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest):
+    log_path = os.path.join(os.path.dirname(__file__), "incoming_requests.txt")
+    with open(log_path, "a", encoding="utf-8") as log_file:
+        log_file.write(f"Incoming request: {payload.json()}\n")
     if llm is None:
         raise HTTPException(status_code=500, detail="GROQ_API_KEY is not set")
 

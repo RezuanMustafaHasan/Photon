@@ -1,9 +1,69 @@
-import React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import LessonSidebar from '../components/LessonSidebar';
 import ChatWindow from '../components/ChatWindow';
 
+const createInitialMessages = () => ([
+  {
+    id: crypto.randomUUID(),
+    sender: 'ai',
+    text: 'Ask your question here.',
+  },
+]);
+
 const ChapterChat = ({ chapterTitle, onBack }) => {
+  const [selectedLesson, setSelectedLesson] = useState('');
+  const [lessonContent, setLessonContent] = useState('');
+  const [messagesByLesson, setMessagesByLesson] = useState({});
+
+  const activeLesson = selectedLesson || 'general';
+  const currentMessages = useMemo(() => {
+    return messagesByLesson[activeLesson] || createInitialMessages();
+  }, [activeLesson, messagesByLesson]);
+
+  const setCurrentMessages = (updater) => {
+    setMessagesByLesson((prev) => {
+      const previousMessages = prev[activeLesson] || createInitialMessages();
+      const nextMessages = typeof updater === 'function' ? updater(previousMessages) : updater;
+      return { ...prev, [activeLesson]: nextMessages };
+    });
+  };
+
+  const handleSelectLesson = (lesson) => {
+    const nextLesson = lesson || '';
+    setSelectedLesson(nextLesson);
+    if (!nextLesson) {
+      return;
+    }
+    setMessagesByLesson((prev) => {
+      if (prev[nextLesson]) {
+        return prev;
+      }
+      return { ...prev, [nextLesson]: createInitialMessages() };
+    });
+  };
+
+  useEffect(() => {
+    const loadLesson = async () => {
+      if (!chapterTitle || !selectedLesson) {
+        setLessonContent('');
+        return;
+      }
+      try {
+        const response = await fetch(`/api/chapters/${encodeURIComponent(chapterTitle)}/lessons/${encodeURIComponent(selectedLesson)}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setLessonContent('');
+          return;
+        }
+        setLessonContent(JSON.stringify(data.lesson || {}, null, 2));
+      } catch {
+        setLessonContent('');
+      }
+    };
+    loadLesson();
+  }, [chapterTitle, selectedLesson]);
+
   return (
     <div className="vh-100 d-flex flex-column bg-background overflow-hidden">
       <Navbar />
@@ -11,7 +71,11 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
       <main className="flex-grow-1 d-flex overflow-hidden position-relative">
         {/* Left Sidebar - Fixed Width & Scrollable */}
         <div className="d-none d-lg-block w-sidebar-lg w-sidebar-xl h-100 flex-shrink-0 border-end border-gray-100 bg-white">
-          <LessonSidebar chapterTitle={chapterTitle} />
+          <LessonSidebar
+            chapterTitle={chapterTitle}
+            selectedLesson={selectedLesson}
+            onSelectLesson={handleSelectLesson}
+          />
         </div>
         
         {/* Right Chat Area - Flex Grow & Independent Scroll */}
@@ -24,7 +88,11 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
               <span className="fw-bold text-primary">{chapterTitle || 'Chapter'}</span>
            </div>
 
-           <ChatWindow />
+           <ChatWindow
+             messages={currentMessages}
+             setMessages={setCurrentMessages}
+             lessonContext={lessonContent}
+           />
         </div>
       </main>
     </div>

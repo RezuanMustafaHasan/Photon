@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import LessonItem from './LessonItem';
 
-const LessonSidebar = ({ chapterTitle }) => {
+const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
   const [lessons, setLessons] = useState([]);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
@@ -25,6 +25,9 @@ const LessonSidebar = ({ chapterTitle }) => {
         if (mounted) {
           const items = Array.isArray(data.lessons) ? data.lessons : [];
           setLessons(items);
+          if (!selectedLesson && items.length && onSelectLesson) {
+            onSelectLesson(items[0]);
+          }
           setStatus('ready');
         }
       } catch (err) {
@@ -38,7 +41,7 @@ const LessonSidebar = ({ chapterTitle }) => {
     return () => {
       mounted = false;
     };
-  }, [chapterTitle]);
+  }, [chapterTitle, onSelectLesson, selectedLesson]);
 
   return (
     <div className="h-100 d-flex flex-column bg-white border-end border-gray-100">
@@ -61,7 +64,8 @@ const LessonSidebar = ({ chapterTitle }) => {
             key={`${title}-${index}`}
             title={title}
             isCompleted={false}
-            isActive={index === 0}
+            isActive={title === selectedLesson}
+            onClick={() => onSelectLesson && onSelectLesson(title)}
           />
         ))}
       </div>

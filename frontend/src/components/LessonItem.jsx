@@ -1,8 +1,9 @@
 import React from 'react';
 
-const LessonItem = ({ title, isCompleted, isActive }) => {
+const LessonItem = ({ title, isCompleted, isActive, onClick }) => {
   return (
     <div 
+      onClick={onClick}
       className={`d-flex align-items-center gap-3 p-3 rounded-3 cursor-pointer transition-all ${
         isActive 
           ? 'bg-orange-50-50' 

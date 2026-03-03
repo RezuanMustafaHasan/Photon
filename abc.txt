@@ -1,0 +1,26 @@
+Here’s the full flow, step‑by‑step, with file links.
+
+**1) User clicks Send**
+- The Send button calls `onSend()` in [ChatInput.jsx](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/frontend/src/components/ChatInput.jsx#L17-L47).
+- That `onSend` function is passed from the parent (ChatWindow).
+
+**2) ChatWindow sends the message**
+- `ChatWindow` builds a user message and a placeholder AI message, then POSTs to `/api/chat`. See [ChatWindow.jsx](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/frontend/src/components/ChatWindow.jsx#L22-L88).
+- It sends `message` plus a `system` string.
+
+**3) How lesson context is included**
+- `ChapterChat` tracks the selected lesson, loads its full content from backend, and passes it to `ChatWindow` as `lessonContext`. See [ChapterChat.jsx](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/frontend/src/pages/ChapterChat.jsx#L7-L76).
+- `ChatWindow` adds that `lessonContext` into the `system` prompt it sends to `/api/chat`. See [ChatWindow.jsx](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/frontend/src/components/ChatWindow.jsx#L6-L18).
+
+**4) How the backend knows which lesson**
+- The backend does **not** receive a lesson id directly.
+- It receives the **full lesson content** inside the `system` prompt. That’s how the backend gets the lesson context. See [ChatWindow.jsx](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/frontend/src/components/ChatWindow.jsx#L6-L18) and [chatController.js](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/backend/controllers/chatController.js#L1-L37).
+
+**5) How lesson content is loaded**
+- `LessonSidebar` loads lesson names from `/api/chapters/:chapterTitle/lessons`. See [LessonSidebar.jsx](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/frontend/src/components/LessonSidebar.jsx#L8-L58).
+- When a lesson is selected, `ChapterChat` calls `/api/chapters/:chapterTitle/lessons/:lessonTitle` to get the full lesson JSON. See [ChapterChat.jsx](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/frontend/src/pages/ChapterChat.jsx#L35-L62).
+- Backend reads `main_book` → finds the right chapter → finds the lesson → returns the full object. See [chapterController.js](file:///Users/rezuanmustafahasan/Desktop/Work/Web/System%20Project/Photon/backend/controllers/chapterController.js#L1-L112).
+
+**Short summary**
+- UI picks lesson → backend returns full lesson JSON → UI injects that JSON into the system prompt → chat request includes that context.  
+- Backend doesn’t “guess” the lesson; the context is explicitly sent with every chat request.

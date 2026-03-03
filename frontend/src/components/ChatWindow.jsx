@@ -3,25 +3,20 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { useAuth } from '../auth/AuthContext.jsx';
 
-const ChatWindow = () => {
+const ChatWindow = ({ messages, setMessages, lessonContext }) => {
   const { token } = useAuth();
-  const system = 'Use Markdown. Render all math using LaTeX: inline $...$, block $$...$$. Use Markdown tables for comparisons.';
-  const [messages, setMessages] = useState(() => ([
-    {
-      id: crypto.randomUUID(),
-      sender: 'ai',
-      text: 'Ask your question here.',
-    },
-  ]));
+  const baseSystem = 'Use Markdown. Render all math using LaTeX: inline $...$, block $$...$$. Use Markdown tables for comparisons.';
+  const system = lessonContext ? `${baseSystem}\n\nLesson Context:\n${lessonContext}` : baseSystem;
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef(null);
 
+  const safeMessages = messages || [];
   const canSend = useMemo(() => !isSending && draft.trim().length > 0, [isSending, draft]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-  }, [messages.length]);
+  }, [safeMessages.length]);
 
   const send = async () => {
     if (!canSend) return;
@@ -70,7 +65,7 @@ const ChatWindow = () => {
       {/* Messages Area - Scrollable */}
       <div className="flex-grow-1 overflow-y-auto px-4 px-md-5 px-lg-5 py-4 vstack gap-4 custom-scrollbar">
         <div className="container-sm mw-100 vstack gap-4 pb-4" style={{ maxWidth: '48rem' }}>
-          {messages.map((m) => (
+          {safeMessages.map((m) => (
             <ChatMessage key={m.id} sender={m.sender} text={m.text} />
           ))}
           <div ref={scrollRef} />
