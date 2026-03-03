@@ -3,10 +3,8 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { useAuth } from '../auth/AuthContext.jsx';
 
-const ChatWindow = ({ messages, setMessages, lessonContext }) => {
-  const { token } = useAuth();
-  const baseSystem = 'Use Markdown. Render all math using LaTeX: inline $...$, block $$...$$. Use Markdown tables for comparisons.';
-  const system = lessonContext ? `${baseSystem}\n\nLesson Context:\n${lessonContext}` : baseSystem;
+const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
+  const { token, user } = useAuth();
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef(null);
@@ -23,25 +21,33 @@ const ChatWindow = ({ messages, setMessages, lessonContext }) => {
     const text = draft.trim();
     setDraft('');
 
-    const userId = crypto.randomUUID();
+    const userMsgId = crypto.randomUUID();
     const aiId = crypto.randomUUID();
 
     setMessages((prev) => [
       ...prev,
-      { id: userId, sender: 'user', text },
+      { id: userMsgId, sender: 'user', text },
       { id: aiId, sender: 'ai', text: '…' },
     ]);
 
     setIsSending(true);
 
     try {
+      if (!user?.id || !chapterName || !lessonName) {
+        throw new Error('Select a chapter and lesson first');
+      }
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: text, system }),
+        body: JSON.stringify({
+          message: text,
+          userId: user.id,
+          chapterName,
+          lessonName,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

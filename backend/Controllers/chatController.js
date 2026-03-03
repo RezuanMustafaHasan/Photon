@@ -2,10 +2,12 @@ const FASTAPI_CHAT_URL = process.env.FASTAPI_CHAT_URL || 'http://localhost:8000/
 
 export const chat = async (req, res) => {
   const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
-  const system = typeof req.body?.system === 'string' ? req.body.system : undefined;
+  const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+  const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
+  const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
 
-  if (!message) {
-    res.status(400).json({ message: 'message is required' });
+  if (!message || !userId || !chapterName || !lessonName) {
+    res.status(400).json({ message: 'message, userId, chapterName, lessonName are required' });
     return;
   }
 
@@ -16,7 +18,7 @@ export const chat = async (req, res) => {
     const upstream = await fetch(FASTAPI_CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(system ? { message, system } : { message }),
+      body: JSON.stringify({ message, user_id: userId, chapter_name: chapterName, lesson_name: lessonName }),
       signal: controller.signal,
     });
 

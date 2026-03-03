@@ -446,3 +446,4 @@ zope.interface @ file:///Users/builder/cbouss/buildout/croot/zope.interface_1735
 zstandard @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_a5_i6g4o6n/croot/zstandard_1731356352787/work
 
 langchain-groq
+pymongo

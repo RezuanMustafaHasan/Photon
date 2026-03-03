@@ -1,21 +1,27 @@
+import json
 import os
 
-from typing import Optional
-
 from fastapi import FastAPI, HTTPException
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
 from pydantic import BaseModel
+from pymongo import MongoClient
+from bson import ObjectId
+
+from graph.simple_graph import run_chat
 
 app = FastAPI()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-llm = ChatGroq(model="openai/gpt-oss-120b", api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/hsc_physics_db")
+client = MongoClient(MONGODB_URI)
+db = client.get_default_database()
+MAIN_COLLECTION = "main_book"
+MAIN_DOC_ID = "main_book"
 
 
 class ChatRequest(BaseModel):
     message: str
-    system: Optional[str] = None
+    user_id: str
+    chapter_name: str
+    lesson_name: str
 
 
 class ChatResponse(BaseModel):
@@ -32,13 +38,103 @@ async def chat(payload: ChatRequest):
     log_path = os.path.join(os.path.dirname(__file__), "incoming_requests.txt")
     with open(log_path, "a", encoding="utf-8") as log_file:
         log_file.write(f"Incoming request: {payload.json()}\n")
-    if llm is None:
-        raise HTTPException(status_code=500, detail="GROQ_API_KEY is not set")
+    if not payload.message or not payload.user_id or not payload.chapter_name or not payload.lesson_name:
+        raise HTTPException(status_code=400, detail="message, user_id, chapter_name, lesson_name are required")
 
-    messages = []
-    if payload.system:
-        messages.append(SystemMessage(content=payload.system))
-    messages.append(HumanMessage(content=payload.message))
+    lesson = load_lesson(payload.chapter_name, payload.lesson_name)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
 
-    result = await llm.ainvoke(messages)
-    return ChatResponse(response=result.content)
+    history = load_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name)
+    system_text = f"Lesson:\n{json.dumps(lesson, ensure_ascii=False)}"
+    thread_id = f"{payload.user_id}:{payload.chapter_name}:{payload.lesson_name}"
+    try:
+        response_text = run_chat(thread_id, system_text, history, payload.message)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    history.append({"role": "user", "content": payload.message})
+    history.append({"role": "assistant", "content": response_text})
+    save_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name, history)
+    return ChatResponse(response=response_text)
+
+
+def normalize_title(value):
+    return str(value or "").strip().lower()
+
+
+def get_main_items():
+    doc = db[MAIN_COLLECTION].find_one({"_id": MAIN_DOC_ID}) or {}
+    items = doc.get("items") or []
+    return items if isinstance(items, list) else []
+
+
+def get_chapter_source(item):
+    if isinstance(item, dict) and isinstance(item.get("content"), dict):
+        return item.get("content")
+    return item
+
+
+def find_chapter_item(items, title):
+    target = normalize_title(title)
+    for item in items:
+        source = get_chapter_source(item)
+        names = [
+            source.get("chapter_name"),
+            source.get("chapter_name_bn"),
+            item.get("name") if isinstance(item, dict) else None,
+        ]
+        if any(normalize_title(name) == target for name in names):
+            return item
+    return None
+
+
+def find_lesson(source, lesson_name):
+    target = normalize_title(lesson_name)
+    lessons = source.get("lessons") if isinstance(source, dict) else None
+    if isinstance(lessons, list):
+        for entry in lessons:
+            name = entry.get("lesson_name") or entry.get("lesson_name_bn") or entry.get("lesson_title")
+            number = entry.get("lesson-no") or entry.get("lesson_no")
+            if normalize_title(name) == target or normalize_title(number) == target:
+                return entry
+    boundaries = source.get("lesson_boundaries") if isinstance(source, dict) else None
+    if isinstance(boundaries, list):
+        for title in boundaries:
+            if normalize_title(title) == target:
+                return {"lesson_name": title}
+    return None
+
+
+def load_lesson(chapter_name, lesson_name):
+    items = get_main_items()
+    match = find_chapter_item(items, chapter_name)
+    if not match:
+        return None
+    source = get_chapter_source(match)
+    return find_lesson(source, lesson_name)
+
+
+def parse_user_id(user_id):
+    try:
+        return ObjectId(user_id)
+    except Exception:
+        return user_id
+
+
+def load_chat_history(user_id, chapter_name, lesson_name):
+    key = parse_user_id(user_id)
+    doc = db["chats"].find_one(
+        {"user_id": key, "chapter_name": chapter_name, "lesson_name": lesson_name}
+    ) or {}
+    history = doc.get("history") or []
+    return history if isinstance(history, list) else []
+
+
+def save_chat_history(user_id, chapter_name, lesson_name, history):
+    key = parse_user_id(user_id)
+    db["chats"].update_one(
+        {"user_id": key, "chapter_name": chapter_name, "lesson_name": lesson_name},
+        {"$set": {"history": history}},
+        upsert=True,
+    )

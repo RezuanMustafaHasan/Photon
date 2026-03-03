@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import LessonSidebar from '../components/LessonSidebar';
 import ChatWindow from '../components/ChatWindow';
@@ -13,7 +13,6 @@ const createInitialMessages = () => ([
 
 const ChapterChat = ({ chapterTitle, onBack }) => {
   const [selectedLesson, setSelectedLesson] = useState('');
-  const [lessonContent, setLessonContent] = useState('');
   const [messagesByLesson, setMessagesByLesson] = useState({});
 
   const activeLesson = selectedLesson || 'general';
@@ -43,27 +42,6 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
     });
   };
 
-  useEffect(() => {
-    const loadLesson = async () => {
-      if (!chapterTitle || !selectedLesson) {
-        setLessonContent('');
-        return;
-      }
-      try {
-        const response = await fetch(`/api/chapters/${encodeURIComponent(chapterTitle)}/lessons/${encodeURIComponent(selectedLesson)}`);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          setLessonContent('');
-          return;
-        }
-        setLessonContent(JSON.stringify(data.lesson || {}, null, 2));
-      } catch {
-        setLessonContent('');
-      }
-    };
-    loadLesson();
-  }, [chapterTitle, selectedLesson]);
-
   return (
     <div className="vh-100 d-flex flex-column bg-background overflow-hidden">
       <Navbar />
@@ -91,7 +69,8 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
            <ChatWindow
              messages={currentMessages}
              setMessages={setCurrentMessages}
-             lessonContext={lessonContent}
+             chapterName={chapterTitle}
+             lessonName={selectedLesson}
            />
         </div>
       </main>
