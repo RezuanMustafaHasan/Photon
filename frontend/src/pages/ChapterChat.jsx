@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import LessonSidebar from '../components/LessonSidebar';
 import ChatWindow from '../components/ChatWindow';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 const createInitialMessages = () => ([
   {
@@ -12,6 +13,7 @@ const createInitialMessages = () => ([
 ]);
 
 const ChapterChat = ({ chapterTitle, onBack }) => {
+  const { user } = useAuth();
   const [selectedLesson, setSelectedLesson] = useState('');
   const [messagesByLesson, setMessagesByLesson] = useState({});
 
@@ -31,16 +33,42 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
   const handleSelectLesson = (lesson) => {
     const nextLesson = lesson || '';
     setSelectedLesson(nextLesson);
-    if (!nextLesson) {
-      return;
-    }
-    setMessagesByLesson((prev) => {
-      if (prev[nextLesson]) {
-        return prev;
-      }
-      return { ...prev, [nextLesson]: createInitialMessages() };
-    });
   };
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!user?.id || !chapterTitle || !selectedLesson) {
+        return;
+      }
+      try {
+        const url = new URL('/api/chat/history', window.location.origin);
+        url.searchParams.set('userId', user.id);
+        url.searchParams.set('chapterName', chapterTitle);
+        url.searchParams.set('lessonName', selectedLesson);
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return;
+        }
+        const history = Array.isArray(data.history) ? data.history : [];
+        const mapped = history.map((item) => ({
+          id: crypto.randomUUID(),
+          sender: item.role === 'assistant' ? 'ai' : 'user',
+          text: item.content || '',
+        })).filter((item) => item.text);
+        setMessagesByLesson((prev) => ({
+          ...prev,
+          [selectedLesson]: mapped.length ? mapped : createInitialMessages(),
+        }));
+      } catch {
+        setMessagesByLesson((prev) => ({
+          ...prev,
+          [selectedLesson]: createInitialMessages(),
+        }));
+      }
+    };
+    loadHistory();
+  }, [user?.id, chapterTitle, selectedLesson]);
 
   return (
     <div className="vh-100 d-flex flex-column bg-background overflow-hidden">

@@ -13,6 +13,15 @@ llm = ChatGroq(model="openai/gpt-oss-120b", api_key=GROQ_API_KEY) if GROQ_API_KE
 
 memory = MemorySaver()
 initialized_threads = set()
+BASE_PROMPT = (
+    "You are a Bangladeshi HSC physics tutor.\n"
+    "Understand these concepts in very simple language, so that student can catch the concepts very easily.\n"
+    "Don't reply all at once. Understand student a small concept. Then judge him asking a very small conceptual question. Then move next.\n"
+    "Student might ask question, answer them, but after that move to the next topic in the lesson. Cover the full lesson.\n"
+    "Use the examples, terminology, terms same as provided in the lesson text.\n"
+    "Only cover the concepts in the lesson text. Don't cover any other concept, Not even the extension of the concept. No extra formula or something.\n"
+    "If the overall lesson is done, just simply reply \"Done\". Then the student might ask any additional question."
+)
 
 
 class State(TypedDict):
@@ -46,11 +55,13 @@ def build_history_messages(history):
     return messages
 
 
-def run_chat(thread_id, system_text, history, user_text):
+def run_chat(thread_id, lesson_text, history, user_text):
     messages = []
     if thread_id not in initialized_threads:
-        if system_text:
-            messages.append(SystemMessage(content=system_text))
+        combined = BASE_PROMPT
+        if lesson_text:
+            combined = f"{BASE_PROMPT}\n\nLesson:\n{lesson_text}"
+        messages.append(SystemMessage(content=combined))
         messages.extend(build_history_messages(history or []))
         initialized_threads.add(thread_id)
     messages.append(HumanMessage(content=user_text))

@@ -28,6 +28,10 @@ class ChatResponse(BaseModel):
     response: str
 
 
+class HistoryResponse(BaseModel):
+    history: list
+
+
 @app.get("/")
 def root():
     return {"status": "ok"}
@@ -46,10 +50,10 @@ async def chat(payload: ChatRequest):
         raise HTTPException(status_code=404, detail="Lesson not found")
 
     history = load_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name)
-    system_text = f"Lesson:\n{json.dumps(lesson, ensure_ascii=False)}"
+    lesson_text = json.dumps(lesson, ensure_ascii=False)
     thread_id = f"{payload.user_id}:{payload.chapter_name}:{payload.lesson_name}"
     try:
-        response_text = run_chat(thread_id, system_text, history, payload.message)
+        response_text = run_chat(thread_id, lesson_text, history, payload.message)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -57,6 +61,14 @@ async def chat(payload: ChatRequest):
     history.append({"role": "assistant", "content": response_text})
     save_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name, history)
     return ChatResponse(response=response_text)
+
+
+@app.get("/history", response_model=HistoryResponse)
+async def history(user_id: str, chapter_name: str, lesson_name: str):
+    if not user_id or not chapter_name or not lesson_name:
+        raise HTTPException(status_code=400, detail="user_id, chapter_name, lesson_name are required")
+    history_data = load_chat_history(user_id, chapter_name, lesson_name)
+    return HistoryResponse(history=history_data)
 
 
 def normalize_title(value):

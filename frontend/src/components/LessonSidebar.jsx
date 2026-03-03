@@ -26,7 +26,9 @@ const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
           const items = Array.isArray(data.lessons) ? data.lessons : [];
           setLessons(items);
           if (!selectedLesson && items.length && onSelectLesson) {
-            onSelectLesson(items[0]);
+            const stored = chapterTitle ? localStorage.getItem(`photon_last_lesson_${chapterTitle}`) : '';
+            const initial = stored && items.includes(stored) ? stored : items[0];
+            onSelectLesson(initial);
           }
           setStatus('ready');
         }
@@ -65,7 +67,12 @@ const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
             title={title}
             isCompleted={false}
             isActive={title === selectedLesson}
-            onClick={() => onSelectLesson && onSelectLesson(title)}
+            onClick={() => {
+              if (chapterTitle) {
+                localStorage.setItem(`photon_last_lesson_${chapterTitle}`, title);
+              }
+              onSelectLesson && onSelectLesson(title);
+            }}
           />
         ))}
       </div>
