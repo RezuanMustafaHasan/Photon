@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useParams, Navigate } from 'react-router-do
 import { useAuth } from './auth/AuthContext.jsx';
 import Dashboard from './pages/Dashboard';
 import ChapterChat from './pages/ChapterChat';
+import ExamPage from './pages/ExamPage';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -86,6 +87,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ChapterChatRoute />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/exam"
+        element={
+          <ProtectedRoute>
+            <ExamPage />
           </ProtectedRoute>
         }
       />

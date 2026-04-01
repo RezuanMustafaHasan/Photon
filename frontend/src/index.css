@@ -15,8 +15,9 @@
 body {
   background-color: var(--color-background);
   color: var(--bs-primary);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -26,6 +27,35 @@ h1, h2, h3, h4, h5, h6 {
 /* Custom Fonts */
 .font-bangla {
   font-family: 'Hind Siliguri', 'Noto Sans Bengali', sans-serif;
+}
+
+.exam-rich-text {
+  color: inherit;
+}
+
+.exam-rich-text p,
+.exam-rich-text ul,
+.exam-rich-text ol {
+  color: inherit;
+}
+
+.exam-rich-text-inline {
+  display: inline;
+}
+
+.exam-rich-text-inline > * {
+  display: inline;
+}
+
+.exam-rich-text .katex {
+  color: inherit;
+  font-size: 1.08em;
+}
+
+.exam-rich-text .katex-display {
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 /* Utilities mirroring Tailwind */

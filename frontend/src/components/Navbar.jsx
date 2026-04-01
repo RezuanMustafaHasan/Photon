@@ -1,10 +1,18 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 
-const Navbar = () => {
+const Navbar = ({ examPrefillChapter = '' }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
+  const isDashboardActive = location.pathname.startsWith('/dashboard');
+  const isExamActive = location.pathname.startsWith('/exam');
+
+  const navigateToExam = () => {
+    const query = examPrefillChapter ? `?chapter=${encodeURIComponent(examPrefillChapter)}` : '';
+    navigate(`/exam${query}`);
+  };
 
   return (
     <nav className="d-flex align-items-center justify-content-between px-4 py-3 bg-white border-bottom border-gray-100 shadow-sm sticky-top z-50">
@@ -22,10 +30,10 @@ const Navbar = () => {
 
       {/* Center: Nav Items */}
       <div className="d-none d-md-flex align-items-center gap-1 bg-gray-50 p-1 rounded-pill border border-gray-100">
-        <NavItem active>Dashboard</NavItem>
-        <NavItem>Admission</NavItem>
-        <NavItem>Revision</NavItem>
-        <NavItem>Exam</NavItem>
+        <NavItem active={isDashboardActive} onClick={() => navigate('/dashboard')}>Dashboard</NavItem>
+        <NavItem disabled>Admission</NavItem>
+        <NavItem disabled>Revision</NavItem>
+        <NavItem active={isExamActive} onClick={navigateToExam}>Exam</NavItem>
       </div>
 
       {/* Right: User */}
@@ -48,11 +56,16 @@ const Navbar = () => {
   );
 };
 
-const NavItem = ({ children, active }) => (
+const NavItem = ({ children, active, disabled, onClick }) => (
   <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
     className={`px-4 py-1 rounded-pill small fw-medium border-0 transition-all duration-200 ${
       active
         ? 'bg-primary text-white shadow-sm'
+        : disabled
+        ? 'bg-transparent text-secondary'
         : 'bg-transparent text-secondary hover-bg-white hover-text-primary hover-shadow-sm'
     }`}
   >

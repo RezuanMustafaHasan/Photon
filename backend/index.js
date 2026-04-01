@@ -5,6 +5,7 @@ import connectDB from './util/db.js';
 import authRoutes from './routes/authRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import chapterRoutes from './routes/chapterRoutes.js';
+import examRoutes from './routes/examRoutes.js';
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/chapters', chapterRoutes);
+app.use('/api/exams', examRoutes);
 
 connectDB(process.env.MONGODB_URI || 'mongodb://localhost:27017/hsc_physics_db')
   .then(() => {

@@ -33,3 +33,4 @@ Incoming request: {"message":"start","user_id":"69ccd605064c28a837a780c8","chapt
 Incoming request: {"message":"τ=rFsinθ=0.8m×10N×1=8N\\cdotpm\neita ki bal likhso N er pore?","user_id":"69ccd605064c28a837a780c8","chapter_name":"নিউটনের বলবিদ্যা","lesson_name":"টর্ক (Torque)"}
 Incoming request: {"message":"start","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"আধান"}
 Incoming request: {"message":"explain","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"আধান"}
+Incoming request: {"message":"for static electricity","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"আধান"}
