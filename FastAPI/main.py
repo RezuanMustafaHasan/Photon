@@ -8,9 +8,34 @@ from bson import ObjectId
 
 from graph.simple_graph import run_chat
 
+
+def load_env_file(env_path):
+    if not os.path.exists(env_path):
+        return
+
+    with open(env_path, "r", encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+BASE_DIR = os.path.dirname(__file__)
+load_env_file(os.path.join(BASE_DIR, ".env"))
+
 app = FastAPI()
 
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/hsc_physics_db")
+MONGODB_URI = os.getenv("MONGODB_URI")
+if not MONGODB_URI:
+    raise RuntimeError("MONGODB_URI is not set in FastAPI/.env")
+print(f"Using MongoDB URI: {MONGODB_URI}")
+
 client = MongoClient(MONGODB_URI)
 db = client.get_default_database()
 MAIN_COLLECTION = "main_book"

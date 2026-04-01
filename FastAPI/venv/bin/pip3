@@ -1,4 +1,6 @@
-#!/Users/rezuanmustafahasan/Desktop/Work/Web/FastAPI/venv/bin/python
+#!/bin/sh
+'''exec' "/Users/rezuanmustafahasan/Desktop/Work/Web/System Project/Photon /FastAPI/venv/bin/python3" "$0" "$@"
+' '''
 # -*- coding: utf-8 -*-
 import re
 import sys
