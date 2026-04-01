@@ -7,10 +7,6 @@ from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-llm = ChatGroq(model="openai/gpt-oss-120b", api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-
 memory = MemorySaver()
 initialized_threads = set()
 BASE_PROMPT = (
@@ -28,7 +24,15 @@ class State(TypedDict):
     messages: Annotated[list, add_messages]
 
 
+def get_llm():
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return None
+    return ChatGroq(model="openai/gpt-oss-120b", api_key=api_key)
+
+
 def chatbot(state: State):
+    llm = get_llm()
     if llm is None:
         raise ValueError("GROQ_API_KEY is not set")
     return {"messages": [llm.invoke(state["messages"])]}
