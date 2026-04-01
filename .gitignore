@@ -37,6 +37,12 @@ lerna-debug.log*
 *.sw?
 # Python virtual environments
 venv/
+.venv/
+**/venv/
+**/.venv/
+**/venv-py39-backup/
+**/__pycache__/
+*.pyc
 
 # Local dev helper scripts
 dev-env.sh
