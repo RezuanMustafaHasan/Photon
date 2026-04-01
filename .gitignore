@@ -38,3 +38,10 @@ lerna-debug.log*
 # Python virtual environments
 venv/
 
+# Local dev helper scripts
+dev-env.sh
+run-dev.sh
+stop-dev.sh
+
+
+z_How_To_run.txt

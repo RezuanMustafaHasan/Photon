@@ -1,9 +1,12 @@
 const cors = require('cors');
+const dotenv = require('dotenv');
 const express = require('express');
 const fs = require('fs/promises');
 const path = require('path');
 const mongoose = require('mongoose');
 const multer = require('multer');
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5050;
