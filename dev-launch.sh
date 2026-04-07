@@ -16,7 +16,9 @@ run_service() {
       cd "$ROOT/FastAPI"
       . .venv-linux/bin/activate
       pkill -f "uvicorn main:app --host 127.0.0.1 --port 8000" 2>/dev/null || true
-      exec uvicorn main:app --host 127.0.0.1 --port 8000
+      pkill -f "$ROOT/FastAPI/.venv-linux/bin/python .*uvicorn.*main:app" 2>/dev/null || true
+      pkill -f "main:app --host 127.0.0.1 --port 8000 --reload" 2>/dev/null || true
+      exec uvicorn main:app --host 127.0.0.1 --port 8000 --reload
       ;;
     backend)
       cd "$ROOT"

@@ -72,7 +72,7 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
 
   return (
     <div className="vh-100 d-flex flex-column bg-background overflow-hidden">
-      <Navbar />
+      <Navbar examPrefillChapter={chapterTitle} />
       
       <main className="flex-grow-1 d-flex overflow-hidden position-relative">
         {/* Left Sidebar - Fixed Width & Scrollable */}
