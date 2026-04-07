@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Navbar from '../components/Navbar';
 import LessonSidebar from '../components/LessonSidebar';
 import ChatWindow from '../components/ChatWindow';
@@ -42,6 +42,12 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
   const [selectedLesson, setSelectedLesson] = useState('');
   const [messagesByLesson, setMessagesByLesson] = useState({});
   const [rateLimitNotice, setRateLimitNotice] = useState(null);
+  const lessonActivityRef = useRef({
+    chapterName: '',
+    lessonName: '',
+    bufferedMs: 0,
+    activeSince: null,
+  });
 
   const activeLesson = selectedLesson || 'general';
   const currentMessages = useMemo(() => {
@@ -60,6 +66,31 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
     const nextLesson = lesson || '';
     setSelectedLesson(nextLesson);
   };
+
+  const postLessonActivity = useCallback(async ({
+    chapterName,
+    lessonName,
+    seconds,
+    keepalive = false,
+  }) => {
+    if (!token || !chapterName || !lessonName || seconds <= 0) {
+      return;
+    }
+
+    await fetch('/api/mastery/lesson-activity', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        chapterName,
+        lessonName,
+        seconds,
+      }),
+      keepalive,
+    });
+  }, [token]);
 
   const loadLessonHistory = useCallback(async (lessonName) => {
     if (!token || !chapterTitle || !lessonName) {
@@ -205,6 +236,86 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
     }
   }, [chapterTitle, loadLessonHistory, messagesByLesson, showRateLimitNotice, token]);
 
+  const pauseLessonTracking = useCallback(() => {
+    const state = lessonActivityRef.current;
+    if (state.activeSince !== null) {
+      state.bufferedMs += Date.now() - state.activeSince;
+      state.activeSince = null;
+    }
+  }, []);
+
+  const canTrackLesson = useCallback(() => (
+    Boolean(token && chapterTitle && selectedLesson)
+    && typeof document !== 'undefined'
+    && document.visibilityState === 'visible'
+    && document.hasFocus()
+  ), [chapterTitle, selectedLesson, token]);
+
+  const resumeLessonTracking = useCallback(() => {
+    const state = lessonActivityRef.current;
+    if (!canTrackLesson()) {
+      return;
+    }
+
+    if (state.chapterName !== chapterTitle || state.lessonName !== selectedLesson) {
+      return;
+    }
+
+    if (state.activeSince === null) {
+      state.activeSince = Date.now();
+    }
+  }, [canTrackLesson, chapterTitle, selectedLesson]);
+
+  const flushLessonSnapshot = useCallback(async (snapshot, { force = false, keepalive = false } = {}) => {
+    const seconds = Math.floor((snapshot?.bufferedMs || 0) / 1000);
+    if (!snapshot?.chapterName || !snapshot?.lessonName || seconds < 1) {
+      return;
+    }
+    if (!force && seconds < 15) {
+      return;
+    }
+
+    try {
+      await postLessonActivity({
+        chapterName: snapshot.chapterName,
+        lessonName: snapshot.lessonName,
+        seconds,
+        keepalive,
+      });
+    } catch {
+      // Best effort only. Mastery tracking must not interrupt the chat flow.
+    }
+  }, [postLessonActivity]);
+
+  const flushCurrentLessonActivity = useCallback(async ({ force = false, keepalive = false } = {}) => {
+    pauseLessonTracking();
+    const snapshot = {
+      ...lessonActivityRef.current,
+    };
+    const seconds = Math.floor((snapshot.bufferedMs || 0) / 1000);
+    if (!snapshot.chapterName || !snapshot.lessonName || seconds < 1 || (!force && seconds < 15)) {
+      resumeLessonTracking();
+      return;
+    }
+
+    lessonActivityRef.current.bufferedMs = Math.max(0, lessonActivityRef.current.bufferedMs - (seconds * 1000));
+
+    try {
+      await postLessonActivity({
+        chapterName: snapshot.chapterName,
+        lessonName: snapshot.lessonName,
+        seconds,
+        keepalive,
+      });
+    } catch {
+      lessonActivityRef.current.bufferedMs += seconds * 1000;
+    } finally {
+      if (!keepalive) {
+        resumeLessonTracking();
+      }
+    }
+  }, [pauseLessonTracking, postLessonActivity, resumeLessonTracking]);
+
   useEffect(() => {
     if (!rateLimitNotice) {
       return undefined;
@@ -232,6 +343,79 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
 
     loadLessonHistory(selectedLesson);
   }, [loadLessonHistory, messagesByLesson, selectedLesson]);
+
+  useEffect(() => {
+    const previousState = lessonActivityRef.current;
+    pauseLessonTracking();
+
+    if (previousState.chapterName && previousState.lessonName) {
+      flushLessonSnapshot(
+        {
+          ...previousState,
+          bufferedMs: previousState.bufferedMs,
+        },
+        { force: true },
+      );
+    }
+
+    lessonActivityRef.current = {
+      chapterName: chapterTitle || '',
+      lessonName: selectedLesson || '',
+      bufferedMs: 0,
+      activeSince: null,
+    };
+
+    resumeLessonTracking();
+  }, [chapterTitle, flushLessonSnapshot, pauseLessonTracking, resumeLessonTracking, selectedLesson]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      flushCurrentLessonActivity();
+    }, 15000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [flushCurrentLessonActivity]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus()) {
+        resumeLessonTracking();
+        return;
+      }
+
+      pauseLessonTracking();
+      flushCurrentLessonActivity({ force: true });
+    };
+
+    const handleFocus = () => {
+      resumeLessonTracking();
+    };
+
+    const handleBlur = () => {
+      pauseLessonTracking();
+      flushCurrentLessonActivity({ force: true });
+    };
+
+    const handlePageHide = () => {
+      pauseLessonTracking();
+      flushCurrentLessonActivity({ force: true, keepalive: true });
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('pagehide', handlePageHide);
+      handlePageHide();
+    };
+  }, [flushCurrentLessonActivity, pauseLessonTracking, resumeLessonTracking]);
 
   return (
     <div className="vh-100 d-flex flex-column bg-background overflow-hidden">

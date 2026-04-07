@@ -1,77 +1,30 @@
-import { useEffect, useState } from 'react';
+import React from 'react';
 import ChapterCard from './ChapterCard';
-import { useAuth } from '../auth/AuthContext.jsx';
-import { createRateLimitNotice } from '../utils/rateLimit.js';
 
-const staticMeta = [
-  { status: 'Completed', progress: 100 },
-  { progress: 45 },
-  { status: 'Weak', progress: 20 },
-  { progress: 0 },
-  { progress: 0 },
-];
-
-const ChapterGrid = ({ onChapterClick }) => {
-  const { showRateLimitNotice } = useAuth();
-  const [chapters, setChapters] = useState([]);
-  const [status, setStatus] = useState('idle');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    const loadChapters = async () => {
-      setStatus('loading');
-      setError('');
-      try {
-        const response = await fetch('/api/chapters');
-        const data = await response.json().catch(() => ({}));
-        if (response.status === 429) {
-          showRateLimitNotice(createRateLimitNotice(
-            data,
-            response.headers,
-            'Too many requests right now. Please wait before loading chapters again.',
-          ));
-          return;
-        }
-        if (!response.ok) {
-          throw new Error(data.message || 'Failed to load chapters');
-        }
-        if (mounted) {
-          const items = Array.isArray(data.chapters) ? data.chapters : [];
-          const mapped = items.map((chapter, index) => {
-            const meta = staticMeta[index % staticMeta.length] || {};
-            return {
-              title: chapter.chapter_name_bn || chapter.chapter_name || 'Untitled',
-              status: meta.status,
-              progress: meta.progress,
-            };
-          });
-          setChapters(mapped);
-          setStatus('ready');
-        }
-      } catch (err) {
-        if (mounted) {
-          setError(err.message);
-          setStatus('error');
-        }
-      }
-    };
-    loadChapters();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+const ChapterGrid = ({ chapters, status, error, onChapterClick }) => {
+  const safeChapters = Array.isArray(chapters) ? chapters : [];
 
   return (
     <div className="mt-5">
       <h2 className="fs-5 fw-bold text-primary mb-4 d-flex align-items-center gap-2">
         📘 HSC Physics Chapters
       </h2>
+
+      {status === 'loading' && <div className="text-secondary mb-3">Loading chapter mastery…</div>}
       {status === 'error' && <div className="text-danger mb-3">{error}</div>}
+      {status !== 'loading' && status !== 'error' && safeChapters.length === 0 && (
+        <div className="text-secondary mb-3">No chapters are available yet.</div>
+      )}
+
       <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-4 row-cols-xl-5 g-4">
-        {chapters.map((chapter, index) => (
-          <div key={index} className="col">
-            <ChapterCard {...chapter} onClick={() => onChapterClick(chapter.title)} />
+        {safeChapters.map((chapter) => (
+          <div key={chapter.chapterName} className="col">
+            <ChapterCard
+              title={chapter.chapterName}
+              status={chapter.status}
+              progress={chapter.masteryScore}
+              onClick={() => onChapterClick(chapter.chapterName)}
+            />
           </div>
         ))}
       </div>

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import ExamAttempt from '../models/ExamAttempt.js';
+import { recordExamMastery } from '../util/mastery.js';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 const FASTAPI_EXAM_URL = `${FASTAPI_BASE_URL}/exam/generate`;
@@ -330,6 +331,14 @@ export const completeExam = async (req, res) => {
       scoreComment,
       wrongQuestions,
       aiSummary: aiSummary || buildFallbackSummary(scoreComment, wrongQuestions),
+    });
+
+    recordExamMastery({
+      userId: req.userId,
+      questions,
+      answers,
+    }).catch((error) => {
+      console.error('Mastery exam signal error:', error);
     });
 
     res.status(201).json({ attempt: formatAttemptDetail(attempt) });

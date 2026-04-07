@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { createRateLimitNotice } from '../utils/rateLimit.js';
@@ -136,8 +136,29 @@ const ExamRichText = ({ text, inline = false }) => {
 
 const ExamPage = () => {
   const { token, showRateLimitNotice } = useAuth();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const preselectedChapter = searchParams.get('chapter')?.trim() || '';
+  const recommendedExam = useMemo(() => {
+    const candidate = location.state?.recommendedExam;
+    if (!candidate || typeof candidate !== 'object') {
+      return null;
+    }
+
+    const chapterName = String(candidate.chapterName || '').trim();
+    const lessonNames = Array.isArray(candidate.lessonNames)
+      ? candidate.lessonNames.map((lessonName) => String(lessonName || '').trim()).filter(Boolean)
+      : [];
+
+    if (!chapterName || !lessonNames.length) {
+      return null;
+    }
+
+    return {
+      chapterName,
+      lessonNames: Array.from(new Set(lessonNames)),
+    };
+  }, [location.state]);
   const resultSummaryRef = useRef(null);
 
   const [chapters, setChapters] = useState([]);
@@ -308,7 +329,9 @@ const ExamPage = () => {
       setTopicStatusByChapter((prev) => ({ ...prev, [chapterTitle]: 'ready' }));
       setSelectedTopicsByChapter((prev) => ({
         ...prev,
-        [chapterTitle]: Array.isArray(prev[chapterTitle]) ? prev[chapterTitle] : [],
+        [chapterTitle]: Array.isArray(prev[chapterTitle])
+          ? topics.filter((topicName) => prev[chapterTitle].includes(topicName))
+          : [],
       }));
     } catch (error) {
       setTopicStatusByChapter((prev) => ({ ...prev, [chapterTitle]: 'error' }));
@@ -348,6 +371,14 @@ const ExamPage = () => {
       0,
     )
   ), [selectedChapters, selectedTopicsByChapter]);
+  const recommendedSelectedCount = useMemo(() => {
+    if (!recommendedExam) {
+      return 0;
+    }
+
+    const selectedTopics = selectedTopicsByChapter[recommendedExam.chapterName] || [];
+    return recommendedExam.lessonNames.filter((lessonName) => selectedTopics.includes(lessonName)).length;
+  }, [recommendedExam, selectedTopicsByChapter]);
 
   const parsedCustomQuestionCount = Number(customQuestionCount);
   const isCustomQuestionCountValid = Number.isInteger(parsedCustomQuestionCount)
@@ -537,6 +568,21 @@ const ExamPage = () => {
     setSelectedTopicsByChapter((prev) => ({
       ...prev,
       [chapterTitle]: [],
+    }));
+  };
+
+  const handleApplyRecommendedTopics = () => {
+    if (!recommendedExam) {
+      return;
+    }
+
+    setBuilderError('');
+    setSelectedChapters((prev) => (
+      prev.includes(recommendedExam.chapterName) ? prev : [recommendedExam.chapterName, ...prev]
+    ));
+    setSelectedTopicsByChapter((prev) => ({
+      ...prev,
+      [recommendedExam.chapterName]: recommendedExam.lessonNames,
     }));
   };
 
@@ -787,6 +833,52 @@ const ExamPage = () => {
           </div>
         </div>
       </div>
+
+      {recommendedExam && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
+          <div className="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-center">
+            <div>
+              <div className="small fw-semibold text-secondary text-uppercase mb-2">Recommended from your weak areas</div>
+              <h2 className={`fs-4 fw-bold text-primary mb-1 ${getBanglaClass(recommendedExam.chapterName)}`}>
+                {recommendedExam.chapterName}
+              </h2>
+              <div className="text-secondary">
+                Photon noticed these lessons need more practice before your next mixed exam.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleApplyRecommendedTopics}
+              className="px-4 py-2 rounded-pill border-0 custom-gradient-btn text-white fw-semibold"
+            >
+              Select recommended topics
+            </button>
+          </div>
+
+          <div className="d-flex flex-wrap gap-2 mt-3">
+            {recommendedExam.lessonNames.map((lessonName) => {
+              const isSelected = (selectedTopicsByChapter[recommendedExam.chapterName] || []).includes(lessonName);
+              return (
+                <span
+                  key={`${recommendedExam.chapterName}-${lessonName}`}
+                  className={`px-3 py-2 rounded-pill small fw-semibold border font-bangla ${
+                    isSelected
+                      ? 'bg-primary text-white border-0'
+                      : 'bg-orange-50 text-primary border-orange-100'
+                  }`}
+                >
+                  {lessonName}
+                </span>
+              );
+            })}
+          </div>
+
+          <div className="small text-secondary mt-3">
+            {recommendedSelectedCount} / {recommendedExam.lessonNames.length} recommended topic(s) selected
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
         <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">

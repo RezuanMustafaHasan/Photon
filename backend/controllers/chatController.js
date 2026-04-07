@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { recordChatConfusion } from '../util/mastery.js';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 const FASTAPI_CHAT_URL = `${FASTAPI_BASE_URL}/chat`;
@@ -114,6 +115,15 @@ export const chat = async (req, res) => {
       res.status(502).json({ message: data?.detail || data?.message || 'Upstream error' });
       return;
     }
+
+    recordChatConfusion({
+      userId,
+      chapterName,
+      lessonName,
+      message,
+    }).catch((error) => {
+      console.error('Mastery chat signal error:', error);
+    });
 
     res.json(mapUpstreamChatResponse(data));
   } catch {
