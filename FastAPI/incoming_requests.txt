@@ -35,3 +35,9 @@ Incoming request: {"message":"start","user_id":"69ccd605064c28a837a780c8","chapt
 Incoming request: {"message":"explain","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"আধান"}
 Incoming request: {"message":"for static electricity","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"আধান"}
 Incoming request: {"message":"start","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র"}
+Incoming request: {"message":"start","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"ধারকের শক্তি"}
+Incoming request: {"message":"what are the math formulas for this topic","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"ধারকের শক্তি"}
+Incoming request: {"message":"what is the difference of it with respect to coulombs law","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"ধারকের শক্তি"}
+Incoming request: {"message":"what are the math formulas for this topic","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"ধারকের শক্তি"}
+Incoming request: {"message":"Please give me a short grounded summary of this lesson and explain how it helps answer my previous question: \"what are the math formulas for this topic\". Keep the answer concise and lesson-focused.","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"তড়িৎ ক্ষেত্র"}
+Incoming request: {"message":"Please introduce this lesson simply for a student. Explain what this lesson is mainly about, what the core idea is, and include the most important formula or definition only if it is relevant. Keep it clear, grounded, and easy to understand.","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"তড়িৎ ক্ষেত্র","history_mode":"assistant_only"}

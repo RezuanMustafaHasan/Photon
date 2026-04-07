@@ -7,6 +7,7 @@ import {
   formatRateLimitWait,
   getRateLimitRemainingSeconds,
 } from '../utils/rateLimit.js';
+import { createAssistantMessage } from '../utils/chatMessages.js';
 
 const ChatWindow = ({
   messages,
@@ -15,6 +16,7 @@ const ChatWindow = ({
   lessonName,
   rateLimitNotice,
   setRateLimitNotice,
+  onSourceClick,
 }) => {
   const { token, showRateLimitNotice } = useAuth();
   const [draft, setDraft] = useState('');
@@ -106,12 +108,20 @@ const ChatWindow = ({
         throw new Error(data?.message || 'Chat failed');
       }
 
-      setMessages((prev) =>
-        prev.map((m) => (m.id === aiId ? { ...m, text: data.response || '' } : m)),
-      );
+      setMessages((prev) => prev.map((m) => (
+        m.id === aiId
+          ? createAssistantMessage(data, { id: aiId, chapterName, lessonName, relatedUserText: text })
+          : m
+      )));
     } catch (err) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === aiId ? { ...m, text: err?.message || 'Chat failed' } : m)),
+        prev.map((m) => (m.id === aiId ? {
+          ...m,
+          text: err?.message || 'Chat failed',
+          textbookAnswer: '',
+          extraExplanation: '',
+          citations: [],
+        } : m)),
       );
     } finally {
       setIsSending(false);
@@ -124,7 +134,13 @@ const ChatWindow = ({
       <div className="flex-grow-1 overflow-y-auto px-4 px-md-5 px-lg-5 py-4 vstack gap-4 custom-scrollbar">
         <div className="container-sm mw-100 vstack gap-4 pb-4" style={{ maxWidth: '48rem' }}>
           {safeMessages.map((m) => (
-            <ChatMessage key={m.id} sender={m.sender} text={m.text} />
+            <ChatMessage
+              key={m.id}
+              message={m}
+              sender={m.sender}
+              text={m.text}
+              onSourceClick={onSourceClick}
+            />
           ))}
           <div ref={scrollRef} />
         </div>

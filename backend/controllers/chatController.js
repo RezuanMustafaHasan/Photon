@@ -17,11 +17,75 @@ const parseUserId = (value) => {
   return value;
 };
 
+const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const normalizeCitation = (value) => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const chapterName = normalizeString(value.chapterName ?? value.chapter_name);
+  const lessonName = normalizeString(value.lessonName ?? value.lesson_name);
+  const sectionLabel = normalizeString(value.sectionLabel ?? value.section_label);
+  const snippet = normalizeString(value.snippet);
+
+  if (!chapterName && !lessonName && !sectionLabel && !snippet) {
+    return null;
+  }
+
+  return {
+    chapterName,
+    lessonName,
+    sectionLabel,
+    snippet,
+  };
+};
+
+export const mapUpstreamChatResponse = (value) => {
+  const citations = Array.isArray(value?.citations)
+    ? value.citations.map(normalizeCitation).filter(Boolean)
+    : [];
+
+  return {
+    response: normalizeString(value?.response),
+    textbookAnswer: normalizeString(value?.textbook_answer ?? value?.textbookAnswer),
+    extraExplanation: normalizeString(value?.extra_explanation ?? value?.extraExplanation),
+    citations,
+  };
+};
+
+export const mapStoredHistoryEntry = (value) => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const role = value.role === 'assistant' ? 'assistant' : 'user';
+  const content = normalizeString(value.content);
+
+  if (role !== 'assistant') {
+    return {
+      role,
+      content,
+    };
+  }
+
+  return {
+    role,
+    content,
+    textbookAnswer: normalizeString(value.textbookAnswer ?? value.textbook_answer),
+    extraExplanation: normalizeString(value.extraExplanation ?? value.extra_explanation),
+    citations: Array.isArray(value.citations)
+      ? value.citations.map(normalizeCitation).filter(Boolean)
+      : [],
+  };
+};
+
 export const chat = async (req, res) => {
   const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
   const userId = typeof req.userId === 'string' ? req.userId.trim() : '';
   const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
   const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
+  const historyMode = req.body?.historyMode === 'assistant_only' ? 'assistant_only' : 'default';
 
   if (!message || !userId || !chapterName || !lessonName) {
     res.status(400).json({ message: 'message, chapterName, and lessonName are required' });
@@ -35,7 +99,13 @@ export const chat = async (req, res) => {
     const upstream = await fetch(FASTAPI_CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, user_id: userId, chapter_name: chapterName, lesson_name: lessonName }),
+      body: JSON.stringify({
+        message,
+        user_id: userId,
+        chapter_name: chapterName,
+        lesson_name: lessonName,
+        history_mode: historyMode,
+      }),
       signal: controller.signal,
     });
 
@@ -45,8 +115,7 @@ export const chat = async (req, res) => {
       return;
     }
 
-    const responseText = typeof data?.response === 'string' ? data.response : '';
-    res.json({ response: responseText });
+    res.json(mapUpstreamChatResponse(data));
   } catch {
     res.status(502).json({ message: 'FastAPI is unreachable' });
   } finally {
@@ -72,7 +141,8 @@ export const history = async (req, res) => {
       chapter_name: chapterName,
       lesson_name: lessonName,
     });
-    res.json({ history: Array.isArray(doc?.history) ? doc.history : [] });
+    const historyEntries = Array.isArray(doc?.history) ? doc.history.map(mapStoredHistoryEntry).filter(Boolean) : [];
+    res.json({ history: historyEntries });
   } catch {
     res.status(500).json({ message: 'Failed to load history' });
   }

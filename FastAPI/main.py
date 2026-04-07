@@ -1,8 +1,7 @@
-import json
 import os
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pymongo import MongoClient
 from bson import ObjectId
 
@@ -57,10 +56,21 @@ class ChatRequest(BaseModel):
     user_id: str
     chapter_name: str
     lesson_name: str
+    history_mode: str = "default"
+
+
+class ChatCitation(BaseModel):
+    chapter_name: str
+    lesson_name: str
+    section_label: str
+    snippet: str
 
 
 class ChatResponse(BaseModel):
     response: str
+    textbook_answer: str
+    extra_explanation: str = ""
+    citations: list[ChatCitation] = Field(default_factory=list)
 
 
 class HistoryResponse(BaseModel):
@@ -147,17 +157,34 @@ async def chat(payload: ChatRequest):
         raise HTTPException(status_code=404, detail="Lesson not found")
 
     history = load_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name)
-    lesson_text = json.dumps(lesson, ensure_ascii=False)
+    lesson_label = get_lesson_label(lesson, payload.lesson_name)
+    lesson_catalog = load_chapter_lesson_catalog(payload.chapter_name, lesson_label)
     thread_id = f"{payload.user_id}:{payload.chapter_name}:{payload.lesson_name}"
     try:
-        response_text = run_chat(thread_id, lesson_text, history, payload.message)
+        response_payload = run_chat(
+            thread_id,
+            payload.chapter_name,
+            lesson_label,
+            lesson_catalog,
+            history,
+            payload.message,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    history.append({"role": "user", "content": payload.message})
-    history.append({"role": "assistant", "content": response_text})
+    if payload.history_mode != "assistant_only":
+        history.append({"role": "user", "content": payload.message})
+    history.append(
+        {
+            "role": "assistant",
+            "content": response_payload["response"],
+            "textbook_answer": response_payload["textbook_answer"],
+            "extra_explanation": response_payload["extra_explanation"],
+            "citations": response_payload["citations"],
+        }
+    )
     save_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name, history)
-    return ChatResponse(response=response_text)
+    return ChatResponse(**response_payload)
 
 
 @app.get("/history", response_model=HistoryResponse)
@@ -274,6 +301,14 @@ def load_lesson(chapter_name, lesson_name):
     return find_lesson(source, lesson_name)
 
 
+def load_chapter_source(chapter_name):
+    items = get_main_items()
+    match = find_chapter_item(items, chapter_name)
+    if not match:
+        return None
+    return get_chapter_source(match)
+
+
 def sanitize_exam_selections(raw_selections):
     merged = {}
 
@@ -308,6 +343,51 @@ def get_lesson_label(lesson, fallback):
         or lesson.get("lesson_title")
         or fallback
     )
+
+
+def build_chat_lesson_entry(chapter_name, lesson, fallback):
+    content = str(lesson.get("content") or "").strip()
+    if not content:
+        return None
+
+    return {
+        "chapter_name": chapter_name,
+        "lesson_name": get_lesson_label(lesson, fallback),
+        "content": content,
+    }
+
+
+def load_chapter_lesson_catalog(chapter_name, current_lesson_name):
+    source = load_chapter_source(chapter_name)
+    if not source:
+        return []
+
+    entries = []
+    current_match = None
+    lessons = source.get("lessons") if isinstance(source, dict) else None
+    if not isinstance(lessons, list):
+        return entries
+
+    target_key = normalize_title(current_lesson_name)
+    for lesson in lessons:
+        lesson_label = get_lesson_label(lesson, current_lesson_name)
+        entry = build_chat_lesson_entry(chapter_name, lesson, lesson_label)
+        if not entry:
+            continue
+        entries.append(entry)
+        if normalize_title(lesson_label) == target_key:
+            current_match = entry
+
+    if current_match:
+        ordered = [current_match]
+        ordered.extend(
+            entry
+            for entry in entries
+            if normalize_title(entry["lesson_name"]) != normalize_title(current_match["lesson_name"])
+        )
+        return ordered
+
+    return entries
 
 
 def load_selected_lessons(selections):
