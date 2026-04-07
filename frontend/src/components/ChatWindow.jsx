@@ -2,19 +2,59 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { useAuth } from '../auth/AuthContext.jsx';
+import {
+  createRateLimitNotice,
+  formatRateLimitWait,
+  getRateLimitRemainingSeconds,
+} from '../utils/rateLimit.js';
 
-const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
-  const { token, user } = useAuth();
+const ChatWindow = ({
+  messages,
+  setMessages,
+  chapterName,
+  lessonName,
+  rateLimitNotice,
+  setRateLimitNotice,
+}) => {
+  const { token, showRateLimitNotice } = useAuth();
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const scrollRef = useRef(null);
 
   const safeMessages = messages || [];
-  const canSend = useMemo(() => !isSending && draft.trim().length > 0, [isSending, draft]);
+  const remainingSeconds = useMemo(
+    () => getRateLimitRemainingSeconds(rateLimitNotice, now),
+    [rateLimitNotice, now],
+  );
+  const isRateLimited = remainingSeconds > 0;
+  const canSend = useMemo(
+    () => !isSending && !isRateLimited && draft.trim().length > 0,
+    [isSending, isRateLimited, draft],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [safeMessages.length]);
+
+  useEffect(() => {
+    if (!rateLimitNotice) {
+      return undefined;
+    }
+
+    if (remainingSeconds <= 0) {
+      setRateLimitNotice(null);
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [rateLimitNotice, remainingSeconds, setRateLimitNotice]);
 
   const send = async () => {
     if (!canSend) return;
@@ -33,7 +73,10 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
     setIsSending(true);
 
     try {
-      if (!user?.id || !chapterName || !lessonName) {
+      if (!token) {
+        throw new Error('Please sign in again.');
+      }
+      if (!chapterName || !lessonName) {
         throw new Error('Select a chapter and lesson first');
       }
       const res = await fetch('/api/chat', {
@@ -44,12 +87,21 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
         },
         body: JSON.stringify({
           message: text,
-          userId: user.id,
           chapterName,
           lessonName,
         }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        const notice = createRateLimitNotice(
+          data,
+          res.headers,
+          'You are sending messages too quickly. Please wait a moment and try again.',
+        );
+        setRateLimitNotice(notice);
+        showRateLimitNotice(notice);
+        throw new Error(notice.message);
+      }
       if (!res.ok) {
         throw new Error(data?.message || 'Chat failed');
       }
@@ -80,12 +132,22 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
 
       {/* Input Area - Sticky Bottom */}
       <div className="sticky-bottom w-100 backdrop-blur-sm pb-4 px-4 px-md-5 px-lg-5 pt-2">
+         {isRateLimited && rateLimitNotice && (
+            <div className="container-sm mw-100 mb-3" style={{ maxWidth: '48rem' }}>
+              <div className="bg-red-50 border border-red-100 rounded-3 p-3 text-red-700 small shadow-sm">
+                <div className="fw-semibold">{rateLimitNotice.message}</div>
+                <div className="mt-1">
+                  Try again in {formatRateLimitWait(remainingSeconds)}.
+                </div>
+              </div>
+            </div>
+         )}
          <div className="container-sm mw-100 shadow-lg rounded-2xl bg-white" style={{ maxWidth: '48rem' }}>
             <ChatInput
               value={draft}
               onChange={setDraft}
               onSend={send}
-              disabled={isSending}
+              disabled={isSending || isRateLimited}
             />
          </div>
       </div>

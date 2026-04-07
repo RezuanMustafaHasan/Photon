@@ -17,6 +17,9 @@ help:
 	@echo ""
 	@echo "Optional:"
 	@echo "  make run TERMINAL=gnome-terminal"
+	@echo ""
+	@echo "If no GUI terminal app is found, make run falls back to background mode"
+	@echo "and writes logs in .run-logs/ (similar to run-dev.sh)."
 
 run:
 	@$(MAKE) stop >/dev/null
@@ -25,7 +28,8 @@ run:
 	@$(call open_terminal,Photon Admin Backend,admin-backend)
 	@$(call open_terminal,Photon Frontend,frontend)
 	@$(call open_terminal,Photon Admin Frontend,admin-frontend)
-	@echo "Opened project services in separate terminals."
+	@echo "Started project services."
+	@echo "(Uses separate terminals when available, otherwise background fallback.)"
 	@echo "Frontend:       http://127.0.0.1:5173"
 	@echo "Admin frontend: http://127.0.0.1:5174/admin"
 
@@ -66,10 +70,18 @@ define open_terminal
 		done; \
 	fi; \
 	if [ -z "$$term" ]; then \
-		echo "No supported terminal launcher found."; \
-		echo "Install one of: gnome-terminal, kgx, konsole, xfce4-terminal, tilix, kitty, alacritty, xterm"; \
-		echo "Or run services directly with: make fastapi / make backend / make admin-backend / make frontend / make admin-frontend"; \
-		exit 1; \
+		mkdir -p "$(ROOT)/.run-logs" "$(ROOT)/.run-pids"; \
+		pid_file="$(ROOT)/.run-pids/$(2).pid"; \
+		log_file="$(ROOT)/.run-logs/$(2).log"; \
+		if [ -f "$$pid_file" ] && kill -0 "$$(cat "$$pid_file")" >/dev/null 2>&1; then \
+			echo "$(2) is already running with PID $$(cat "$$pid_file")"; \
+		else \
+			nohup bash "$(LAUNCHER)" $(2) >"$$log_file" 2>&1 & \
+			echo $$! >"$$pid_file"; \
+			echo "Started $(2) in background (PID $$(cat "$$pid_file"))"; \
+			echo "Log: $$log_file"; \
+		fi; \
+		exit 0; \
 	fi; \
 	case "$$term" in \
 		gnome-terminal) gnome-terminal --title="$(1)" -- bash "$(LAUNCHER)" $(2) --hold >/dev/null 2>&1 & ;; \

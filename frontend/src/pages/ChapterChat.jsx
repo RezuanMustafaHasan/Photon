@@ -3,6 +3,7 @@ import Navbar from '../components/Navbar';
 import LessonSidebar from '../components/LessonSidebar';
 import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { createRateLimitNotice, getRateLimitRemainingSeconds } from '../utils/rateLimit.js';
 
 const createInitialMessages = () => ([
   {
@@ -13,9 +14,10 @@ const createInitialMessages = () => ([
 ]);
 
 const ChapterChat = ({ chapterTitle, onBack }) => {
-  const { user } = useAuth();
+  const { token, showRateLimitNotice } = useAuth();
   const [selectedLesson, setSelectedLesson] = useState('');
   const [messagesByLesson, setMessagesByLesson] = useState({});
+  const [rateLimitNotice, setRateLimitNotice] = useState(null);
 
   const activeLesson = selectedLesson || 'general';
   const currentMessages = useMemo(() => {
@@ -36,17 +38,50 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
   };
 
   useEffect(() => {
+    if (!rateLimitNotice) {
+      return undefined;
+    }
+
+    const remainingSeconds = getRateLimitRemainingSeconds(rateLimitNotice);
+    if (remainingSeconds <= 0) {
+      setRateLimitNotice(null);
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setRateLimitNotice(null);
+    }, remainingSeconds * 1000);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [rateLimitNotice]);
+
+  useEffect(() => {
     const loadHistory = async () => {
-      if (!user?.id || !chapterTitle || !selectedLesson) {
+      if (!token || !chapterTitle || !selectedLesson) {
         return;
       }
       try {
         const url = new URL('/api/chat/history', window.location.origin);
-        url.searchParams.set('userId', user.id);
         url.searchParams.set('chapterName', chapterTitle);
         url.searchParams.set('lessonName', selectedLesson);
-        const res = await fetch(url);
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         const data = await res.json().catch(() => ({}));
+        if (res.status === 429) {
+          const notice = createRateLimitNotice(
+            data,
+            res.headers,
+            'Chat history is cooling down. Please wait a moment and try again.',
+          );
+          setRateLimitNotice(notice);
+          showRateLimitNotice(notice);
+          return;
+        }
         if (!res.ok) {
           return;
         }
@@ -68,7 +103,7 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
       }
     };
     loadHistory();
-  }, [user?.id, chapterTitle, selectedLesson]);
+  }, [token, chapterTitle, selectedLesson]);
 
   return (
     <div className="vh-100 d-flex flex-column bg-background overflow-hidden">
@@ -99,6 +134,8 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
              setMessages={setCurrentMessages}
              chapterName={chapterTitle}
              lessonName={selectedLesson}
+             rateLimitNotice={rateLimitNotice}
+             setRateLimitNotice={setRateLimitNotice}
            />
         </div>
       </main>

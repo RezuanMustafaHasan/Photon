@@ -19,12 +19,12 @@ const parseUserId = (value) => {
 
 export const chat = async (req, res) => {
   const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
-  const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+  const userId = typeof req.userId === 'string' ? req.userId.trim() : '';
   const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
   const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
 
   if (!message || !userId || !chapterName || !lessonName) {
-    res.status(400).json({ message: 'message, userId, chapterName, lessonName are required' });
+    res.status(400).json({ message: 'message, chapterName, and lessonName are required' });
     return;
   }
 
@@ -55,12 +55,12 @@ export const chat = async (req, res) => {
 };
 
 export const history = async (req, res) => {
-  const userId = typeof req.query?.userId === 'string' ? req.query.userId.trim() : '';
+  const userId = typeof req.userId === 'string' ? req.userId.trim() : '';
   const chapterName = typeof req.query?.chapterName === 'string' ? req.query.chapterName.trim() : '';
   const lessonName = typeof req.query?.lessonName === 'string' ? req.query.lessonName.trim() : '';
 
   if (!userId || !chapterName || !lessonName) {
-    res.status(400).json({ message: 'userId, chapterName, lessonName are required' });
+    res.status(400).json({ message: 'chapterName and lessonName are required' });
     return;
   }
 

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { createRateLimitNotice } from '../utils/rateLimit.js';
 
 const Signup = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, showRateLimitNotice } = useAuth();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -23,6 +24,14 @@ const Signup = () => {
         body: JSON.stringify({ name, email, password }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        showRateLimitNotice(createRateLimitNotice(
+          data,
+          res.headers,
+          'Too many sign-up attempts. Please wait before trying again.',
+        ));
+        return;
+      }
       if (!res.ok) {
         throw new Error(data?.message || 'Signup failed.');
       }
@@ -133,4 +142,3 @@ const Signup = () => {
 };
 
 export default Signup;
-

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import LessonItem from './LessonItem';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { createRateLimitNotice } from '../utils/rateLimit.js';
 
 const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
+  const { showRateLimitNotice } = useAuth();
   const [lessons, setLessons] = useState([]);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
@@ -19,6 +22,14 @@ const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
       try {
         const response = await fetch(`/api/chapters/${encodeURIComponent(chapterTitle)}/lessons`);
         const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          showRateLimitNotice(createRateLimitNotice(
+            data,
+            response.headers,
+            'Too many requests right now. Please wait before loading lessons again.',
+          ));
+          return;
+        }
         if (!response.ok) {
           throw new Error(data.message || 'Failed to load lessons');
         }

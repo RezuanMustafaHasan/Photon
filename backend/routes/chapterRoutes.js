@@ -1,10 +1,18 @@
 import { Router } from 'express';
 import { getChapters, getLesson, getLessons } from '../controllers/chapterController.js';
 
-const router = Router();
+const passthrough = (_req, _res, next) => {
+  next();
+};
 
-router.get('/', getChapters);
-router.get('/:chapterTitle/lessons', getLessons);
-router.get('/:chapterTitle/lessons/:lessonTitle', getLesson);
+export const createChapterRouter = ({ chapterReadLimiter = passthrough } = {}) => {
+  const router = Router();
 
-export default router;
+  router.get('/', chapterReadLimiter, getChapters);
+  router.get('/:chapterTitle/lessons', chapterReadLimiter, getLessons);
+  router.get('/:chapterTitle/lessons/:lessonTitle', chapterReadLimiter, getLesson);
+
+  return router;
+};
+
+export default createChapterRouter;

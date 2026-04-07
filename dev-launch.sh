@@ -23,12 +23,20 @@ run_service() {
     backend)
       cd "$ROOT"
       . ./dev-env.sh
+      # Avoid EADDRINUSE when an old backend process is still running.
+      pkill -f "$ROOT/backend/node_modules/.bin/nodemon index.js" 2>/dev/null || true
+      pkill -f "$ROOT/backend.*nodemon index.js" 2>/dev/null || true
+      pkill -f "$ROOT/backend.*node index.js" 2>/dev/null || true
       cd backend
       exec npm run dev
       ;;
     admin-backend)
       cd "$ROOT"
       . ./dev-env.sh
+      # Clear stale admin backend processes before starting a new one.
+      pkill -f "$ROOT/admin-backend/node_modules/.bin/nodemon index.js" 2>/dev/null || true
+      pkill -f "$ROOT/admin-backend.*nodemon index.js" 2>/dev/null || true
+      pkill -f "$ROOT/admin-backend.*node index.js" 2>/dev/null || true
       cd admin-backend
       exec npm run dev
       ;;

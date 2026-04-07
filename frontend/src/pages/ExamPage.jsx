@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import { useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { createRateLimitNotice } from '../utils/rateLimit.js';
 
 const QUESTION_COUNT_OPTIONS = [20, 30, 40, 50];
 const MIN_QUESTION_COUNT = 1;
@@ -134,7 +135,7 @@ const ExamRichText = ({ text, inline = false }) => {
 };
 
 const ExamPage = () => {
-  const { token } = useAuth();
+  const { token, showRateLimitNotice } = useAuth();
   const [searchParams] = useSearchParams();
   const preselectedChapter = searchParams.get('chapter')?.trim() || '';
   const resultSummaryRef = useRef(null);
@@ -169,6 +170,10 @@ const ExamPage = () => {
   const [historyError, setHistoryError] = useState('');
   const [historyLoadingAttemptId, setHistoryLoadingAttemptId] = useState('');
 
+  const showExamRateLimit = useCallback((data, headers, fallbackMessage) => {
+    showRateLimitNotice(createRateLimitNotice(data, headers, fallbackMessage));
+  }, [showRateLimitNotice]);
+
   const fetchExamAttempt = useCallback(async (attemptId) => {
     const response = await fetch(`/api/exams/${encodeURIComponent(attemptId)}`, {
       headers: {
@@ -177,12 +182,16 @@ const ExamPage = () => {
     });
 
     const data = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      showExamRateLimit(data, response.headers, 'Too many requests right now. Please wait before loading that exam again.');
+      throw new Error(data.message || 'Rate limited.');
+    }
     if (!response.ok) {
       throw new Error(data.message || 'Failed to load that exam.');
     }
 
     return data.attempt || null;
-  }, [token]);
+  }, [showExamRateLimit, token]);
 
   const fetchExamHistory = useCallback(async () => {
     if (!token) {
@@ -202,6 +211,10 @@ const ExamPage = () => {
         },
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        showExamRateLimit(data, response.headers, 'Too many requests right now. Please wait before loading exam history again.');
+        return;
+      }
       if (!response.ok) {
         throw new Error(data.message || 'Failed to load previous exams.');
       }
@@ -213,7 +226,7 @@ const ExamPage = () => {
       setHistoryStatus('error');
       setHistoryError(error.message || 'Failed to load previous exams.');
     }
-  }, [token]);
+  }, [showExamRateLimit, token]);
 
   useEffect(() => {
     let mounted = true;
@@ -225,6 +238,10 @@ const ExamPage = () => {
       try {
         const response = await fetch('/api/chapters');
         const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          showExamRateLimit(data, response.headers, 'Too many requests right now. Please wait before loading chapters again.');
+          return;
+        }
         if (!response.ok) {
           throw new Error(data.message || 'Failed to load chapters.');
         }
@@ -255,7 +272,7 @@ const ExamPage = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [showExamRateLimit]);
 
   useEffect(() => {
     fetchExamHistory();
@@ -278,6 +295,10 @@ const ExamPage = () => {
     try {
       const response = await fetch(`/api/chapters/${encodeURIComponent(chapterTitle)}/lessons`);
       const data = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        showExamRateLimit(data, response.headers, 'Too many requests right now. Please wait before loading topics again.');
+        return;
+      }
       if (!response.ok) {
         throw new Error(data.message || 'Failed to load topics.');
       }
@@ -296,7 +317,7 @@ const ExamPage = () => {
         [chapterTitle]: error.message || 'Failed to load topics.',
       }));
     }
-  }, []);
+  }, [showExamRateLimit]);
 
   useEffect(() => {
     selectedChapters.forEach((chapterTitle) => {
@@ -415,6 +436,10 @@ const ExamPage = () => {
         });
 
         const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          showExamRateLimit(data, response.headers, 'Too many submissions right now. Please wait before saving this exam again.');
+          return;
+        }
         if (!response.ok) {
           throw new Error(data.message || 'Failed to save your exam result.');
         }
@@ -459,7 +484,7 @@ const ExamPage = () => {
     return () => {
       controller.abort();
     };
-  }, [activeAttempt, completionRetryKey, fetchExamAttempt, fetchExamHistory, hasFinishedActiveAttempt, token]);
+  }, [activeAttempt, completionRetryKey, fetchExamAttempt, fetchExamHistory, hasFinishedActiveAttempt, showExamRateLimit, token]);
 
   const handleChapterToggle = (chapterTitle) => {
     setBuilderError('');
@@ -549,6 +574,10 @@ const ExamPage = () => {
       });
 
       const data = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        showExamRateLimit(data, response.headers, 'Too many exam requests right now. Please wait before generating another one.');
+        return;
+      }
       if (!response.ok) {
         throw new Error(data.message || 'Failed to generate exam.');
       }
@@ -660,7 +689,7 @@ const ExamPage = () => {
                 <div className="text-secondary mb-3">{totalSelectedTopics} topic(s) selected</div>
                 {preselectedChapter && (
                   <div className="small fw-medium text-primary">
-                    Prefilled from chapter: <span className={getBanglaClass(preselectedChapter)}>{preselectedChapter}</span>
+                    {/* Prefilled from chapter: <span className={getBanglaClass(preselectedChapter)}>{preselectedChapter}</span> */}
                   </div>
                 )}
               </div>

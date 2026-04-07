@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import ChapterCard from './ChapterCard';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { createRateLimitNotice } from '../utils/rateLimit.js';
 
 const staticMeta = [
   { status: 'Completed', progress: 100 },
@@ -10,6 +12,7 @@ const staticMeta = [
 ];
 
 const ChapterGrid = ({ onChapterClick }) => {
+  const { showRateLimitNotice } = useAuth();
   const [chapters, setChapters] = useState([]);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
@@ -22,6 +25,14 @@ const ChapterGrid = ({ onChapterClick }) => {
       try {
         const response = await fetch('/api/chapters');
         const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          showRateLimitNotice(createRateLimitNotice(
+            data,
+            response.headers,
+            'Too many requests right now. Please wait before loading chapters again.',
+          ));
+          return;
+        }
         if (!response.ok) {
           throw new Error(data.message || 'Failed to load chapters');
         }
