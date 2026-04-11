@@ -1,27 +1,47 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import LessonItem from './LessonItem';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { createRateLimitNotice } from '../utils/rateLimit.js';
+import { fetchMasterySummary, findChapterProgress } from '../utils/mastery.js';
 
 const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
+  const { token, showRateLimitNotice } = useAuth();
   const [lessons, setLessons] = useState([]);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
+  const [chapterMastery, setChapterMastery] = useState(null);
 
   useEffect(() => {
     let mounted = true;
+
     const loadLessons = async () => {
       if (!chapterTitle) {
         setLessons([]);
         setStatus('idle');
         return;
       }
+
       setStatus('loading');
       setError('');
+
       try {
         const response = await fetch(`/api/chapters/${encodeURIComponent(chapterTitle)}/lessons`);
         const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          if (mounted) {
+            setStatus('idle');
+          }
+          showRateLimitNotice(createRateLimitNotice(
+            data,
+            response.headers,
+            'Too many requests right now. Please wait before loading lessons again.',
+          ));
+          return;
+        }
         if (!response.ok) {
           throw new Error(data.message || 'Failed to load lessons');
         }
+
         if (mounted) {
           const items = Array.isArray(data.lessons) ? data.lessons : [];
           setLessons(items);
@@ -39,11 +59,64 @@ const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
         }
       }
     };
+
     loadLessons();
+
     return () => {
       mounted = false;
     };
-  }, [chapterTitle, onSelectLesson, selectedLesson]);
+  }, [chapterTitle, onSelectLesson, selectedLesson, showRateLimitNotice]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadMastery = async () => {
+      if (!token || !chapterTitle) {
+        setChapterMastery(null);
+        return;
+      }
+
+      try {
+        const { response, data } = await fetchMasterySummary({ token });
+        if (response.status === 429) {
+          showRateLimitNotice(createRateLimitNotice(
+            data,
+            response.headers,
+            'Too many requests right now. Please wait before loading chapter mastery again.',
+          ));
+          return;
+        }
+        if (!response.ok) {
+          return;
+        }
+
+        if (mounted) {
+          setChapterMastery(findChapterProgress(data, chapterTitle));
+        }
+      } catch {
+        if (mounted) {
+          setChapterMastery(null);
+        }
+      }
+    };
+
+    loadMastery();
+
+    return () => {
+      mounted = false;
+    };
+  }, [chapterTitle, showRateLimitNotice, token]);
+
+  const lessonProgressMap = useMemo(() => (
+    new Map(
+      (Array.isArray(chapterMastery?.lessons) ? chapterMastery.lessons : []).map((lesson) => [
+        lesson.lessonName,
+        lesson,
+      ]),
+    )
+  ), [chapterMastery]);
+
+  const chapterProgressValue = Number(chapterMastery?.masteryScore) || 0;
 
   return (
     <div className="h-100 d-flex flex-column bg-white border-end border-gray-100">
@@ -51,9 +124,9 @@ const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
         <h2 className="fs-5 fw-bold text-primary font-bangla mb-3">{chapterTitle || 'Chapter'}</h2>
         <div className="d-flex align-items-center gap-2">
           <div className="flex-grow-1 bg-gray-100 rounded-pill overflow-hidden" style={{ height: '0.375rem' }}>
-            <div className="h-100 bg-accent rounded-pill" style={{ width: '45%' }}></div>
+            <div className="h-100 bg-accent rounded-pill" style={{ width: `${chapterProgressValue}%` }}></div>
           </div>
-          <span className="text-xs fw-bold text-secondary">45%</span>
+          <span className="text-xs fw-bold text-secondary">{chapterProgressValue}%</span>
         </div>
       </div>
 
@@ -61,20 +134,23 @@ const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
         {status === 'error' && <div className="text-danger px-2">{error}</div>}
         {status === 'loading' && <div className="text-secondary px-2">Loading…</div>}
         {status !== 'loading' && !lessons.length && !error && <div className="text-secondary px-2">No lessons yet</div>}
-        {lessons.map((title, index) => (
-          <LessonItem
-            key={`${title}-${index}`}
-            title={title}
-            isCompleted={false}
-            isActive={title === selectedLesson}
-            onClick={() => {
-              if (chapterTitle) {
-                localStorage.setItem(`photon_last_lesson_${chapterTitle}`, title);
-              }
-              onSelectLesson && onSelectLesson(title);
-            }}
-          />
-        ))}
+        {lessons.map((title, index) => {
+          const masteryLesson = lessonProgressMap.get(title);
+          return (
+            <LessonItem
+              key={`${title}-${index}`}
+              title={title}
+              isCompleted={Number(masteryLesson?.masteryScore) >= 80}
+              isActive={title === selectedLesson}
+              onClick={() => {
+                if (chapterTitle) {
+                  localStorage.setItem(`photon_last_lesson_${chapterTitle}`, title);
+                }
+                onSelectLesson && onSelectLesson(title);
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );

@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { useAuth } from '../auth/AuthContext.jsx';
+import {
+  createRateLimitNotice,
+  formatRateLimitWait,
+  getRateLimitRemainingSeconds,
+} from '../utils/rateLimit.js';
+import { createAssistantMessage } from '../utils/chatMessages.js';
 
 const createClearedMessages = () => ([
   {
@@ -12,23 +18,59 @@ const createClearedMessages = () => ([
   },
 ]);
 
-const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
-  const { token, user } = useAuth();
+const ChatWindow = ({
+  messages,
+  setMessages,
+  chapterName,
+  lessonName,
+  rateLimitNotice,
+  setRateLimitNotice,
+  onSourceClick,
+}) => {
+  const { token, user, showRateLimitNotice } = useAuth();
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const scrollRef = useRef(null);
 
   const safeMessages = messages || [];
-  const canSend = useMemo(() => !isSending && !isClearing && draft.trim().length > 0, [isSending, isClearing, draft]);
+  const remainingSeconds = useMemo(
+    () => getRateLimitRemainingSeconds(rateLimitNotice, now),
+    [rateLimitNotice, now],
+  );
+  const isRateLimited = remainingSeconds > 0;
+  const canSend = useMemo(
+    () => !isSending && !isClearing && !isRateLimited && draft.trim().length > 0,
+    [draft, isClearing, isRateLimited, isSending],
+  );
   const canClear = useMemo(
     () => Boolean(!isSending && !isClearing && user?.id && chapterName && lessonName),
-    [isSending, isClearing, user?.id, chapterName, lessonName],
+    [chapterName, isClearing, isSending, lessonName, user?.id],
   );
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [safeMessages.length]);
+
+  useEffect(() => {
+    if (!rateLimitNotice) {
+      return undefined;
+    }
+
+    if (remainingSeconds <= 0) {
+      setRateLimitNotice(null);
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [rateLimitNotice, remainingSeconds, setRateLimitNotice]);
 
   const send = async () => {
     if (!canSend) return;
@@ -47,59 +89,69 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
     setIsSending(true);
 
     try {
-      if (!user?.id || !chapterName || !lessonName) {
+      if (!token) {
+        throw new Error('Please sign in again.');
+      }
+      if (!chapterName || !lessonName) {
         throw new Error('Select a chapter and lesson first');
       }
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           message: text,
-          userId: user.id,
           chapterName,
           lessonName,
         }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        const notice = createRateLimitNotice(
+          data,
+          res.headers,
+          'You are sending messages too quickly. Please wait a moment and try again.',
+        );
+        setRateLimitNotice(notice);
+        showRateLimitNotice(notice);
+        throw new Error(notice.message);
+      }
       if (!res.ok) {
         throw new Error(data?.message || 'Chat failed');
       }
 
-      const responseImages = Array.isArray(data?.images)
-        ? data.images
-            .map((item) => {
-              const imageURL = typeof item?.imageURL === 'string' ? item.imageURL.trim() : '';
-              const description = typeof item?.description === 'string' ? item.description : '';
-              const topic = Array.isArray(item?.topic)
-                ? item.topic.filter((entry) => typeof entry === 'string' && entry.trim().length > 0)
-                : [];
-
-              return {
-                imageURL,
-                description,
-                topic,
-              };
-            })
-            .filter((item) => item.imageURL)
-        : [];
-
-      setMessages((prev) =>
-        prev.map((m) => (m.id === aiId ? { ...m, text: data.response || '', images: responseImages } : m)),
-      );
+      setMessages((prev) => prev.map((message) => (
+        message.id === aiId
+          ? createAssistantMessage(data, {
+            id: aiId,
+            chapterName,
+            lessonName,
+            relatedUserText: text,
+          })
+          : message
+      )));
     } catch (err) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === aiId ? { ...m, text: err?.message || 'Chat failed', images: [] } : m)),
-      );
+      setMessages((prev) => prev.map((message) => (
+        message.id === aiId
+          ? {
+            ...message,
+            text: err?.message || 'Chat failed',
+            textbookAnswer: '',
+            extraExplanation: '',
+            citations: [],
+            images: [],
+          }
+          : message
+      )));
     } finally {
       setIsSending(false);
     }
   };
 
   const clearChatHistory = async () => {
-    if (!canClear) return;
+    if (!canClear || !token) return;
 
     const confirmed = window.confirm(`Delete the chat history for "${lessonName}"?`);
     if (!confirmed) return;
@@ -111,15 +163,24 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          userId: user.id,
           chapterName,
           lessonName,
         }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        const notice = createRateLimitNotice(
+          data,
+          res.headers,
+          'Chat history is cooling down. Please wait a moment and try again.',
+        );
+        setRateLimitNotice(notice);
+        showRateLimitNotice(notice);
+        throw new Error(notice.message);
+      }
       if (!res.ok || !data?.deleted) {
         throw new Error(data?.message || 'Failed to delete chat history');
       }
@@ -155,26 +216,40 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
         </div>
       </div>
 
-      {/* Messages Area - Scrollable */}
       <div className="flex-grow-1 overflow-y-auto px-4 px-md-5 px-lg-5 py-2 vstack gap-4 custom-scrollbar">
         <div className="container-sm mw-100 vstack gap-4 pb-4" style={{ maxWidth: '48rem' }}>
-          {safeMessages.map((m) => (
-            <ChatMessage key={m.id} sender={m.sender} text={m.text} images={m.images} />
+          {safeMessages.map((message) => (
+            <ChatMessage
+              key={message.id}
+              message={message}
+              sender={message.sender}
+              text={message.text}
+              onSourceClick={onSourceClick}
+            />
           ))}
           <div ref={scrollRef} />
         </div>
       </div>
 
-      {/* Input Area - Sticky Bottom */}
       <div className="sticky-bottom w-100 backdrop-blur-sm pb-4 px-4 px-md-5 px-lg-5 pt-2">
-         <div className="container-sm mw-100 shadow-lg rounded-2xl bg-white" style={{ maxWidth: '48rem' }}>
-            <ChatInput
-              value={draft}
-              onChange={setDraft}
-              onSend={send}
-              disabled={isSending || isClearing}
-            />
-         </div>
+        {isRateLimited && rateLimitNotice && (
+          <div className="container-sm mw-100 mb-3" style={{ maxWidth: '48rem' }}>
+            <div className="bg-red-50 border border-red-100 rounded-3 p-3 text-red-700 small shadow-sm">
+              <div className="fw-semibold">{rateLimitNotice.message}</div>
+              <div className="mt-1">
+                Try again in {formatRateLimitWait(remainingSeconds)}.
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="container-sm mw-100 shadow-lg rounded-2xl bg-white" style={{ maxWidth: '48rem' }}>
+          <ChatInput
+            value={draft}
+            onChange={setDraft}
+            onSend={send}
+            disabled={isSending || isClearing || isRateLimited}
+          />
+        </div>
       </div>
     </div>
   );

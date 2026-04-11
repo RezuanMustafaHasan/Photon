@@ -1,36 +1,36 @@
-import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './util/db.js';
-import authRoutes from './routes/authRoutes.js';
-import chatRoutes from './routes/chatRoutes.js';
-import chapterRoutes from './routes/chapterRoutes.js';
-import examRoutes from './routes/examRoutes.js';
+import createApp from './app.js';
+import { connectRedis, isRateLimitEnabled } from './util/redisClient.js';
 
 dotenv.config();
 
-const app = express();
 const PORT = process.env.PORT || 5000;
+const rateLimitEnabled = isRateLimitEnabled();
 
-app.use(cors({ origin: true }));
-app.use(express.json());
+const startServer = async () => {
+  const redisPromise = rateLimitEnabled
+    ? connectRedis({ required: true })
+    : Promise.resolve(null);
 
-app.get('/', (req, res) => {
-  res.send('API is running...');
-});
+  const [redisClient] = await Promise.all([
+    redisPromise,
+    connectDB(process.env.MONGODB_URI || 'mongodb://localhost:27017/hsc_physics_db'),
+  ]);
 
-app.use('/api/auth', authRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/chapters', chapterRoutes);
-app.use('/api/exams', examRoutes);
-
-connectDB(process.env.MONGODB_URI || 'mongodb://localhost:27017/hsc_physics_db')
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
+  const app = createApp({
+    rateLimit: {
+      enabled: rateLimitEnabled,
+      redisClient,
+    },
   });
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Server startup error:', error);
+  process.exit(1);
+});

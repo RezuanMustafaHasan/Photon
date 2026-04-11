@@ -1,10 +1,22 @@
 import { Router } from 'express';
 import { chat, history, clearHistory } from '../controllers/chatController.js';
+import authMiddleware from '../middleware/authMiddleware.js';
 
-const router = Router();
+const passthrough = (_req, _res, next) => {
+  next();
+};
 
-router.post('/', chat);
-router.get('/history', history);
-router.delete('/history', clearHistory);
+export const createChatRouter = ({
+  chatSendLimiter = passthrough,
+  chatHistoryLimiter = passthrough,
+} = {}) => {
+  const router = Router();
 
-export default router;
+  router.post('/', authMiddleware, chatSendLimiter, chat);
+  router.get('/history', authMiddleware, chatHistoryLimiter, history);
+  router.delete('/history', authMiddleware, chatHistoryLimiter, clearHistory);
+
+  return router;
+};
+
+export default createChatRouter;

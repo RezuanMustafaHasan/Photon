@@ -2,10 +2,18 @@ import { Router } from 'express';
 import { login, me, signup } from '../controllers/authController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 
-const router = Router();
+const passthrough = (_req, _res, next) => {
+  next();
+};
 
-router.post('/signup', signup);
-router.post('/login', login);
-router.get('/me', authMiddleware, me);
+export const createAuthRouter = ({ authWriteLimiter = passthrough } = {}) => {
+  const router = Router();
 
-export default router;
+  router.post('/signup', authWriteLimiter, signup);
+  router.post('/login', authWriteLimiter, login);
+  router.get('/me', authMiddleware, me);
+
+  return router;
+};
+
+export default createAuthRouter;

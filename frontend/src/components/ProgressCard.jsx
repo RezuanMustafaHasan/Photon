@@ -8,7 +8,6 @@ const ProgressRing = ({ value, size = 100, strokeWidth = 8 }) => {
   return (
     <div className="position-relative d-flex align-items-center justify-content-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="rotate-n90">
-        {/* Background circle */}
         <circle
           stroke="#E2E8F0"
           fill="transparent"
@@ -17,7 +16,6 @@ const ProgressRing = ({ value, size = 100, strokeWidth = 8 }) => {
           cx={size / 2}
           cy={size / 2}
         />
-        {/* Progress circle */}
         <circle
           stroke="#22C55E"
           fill="transparent"
@@ -39,29 +37,45 @@ const ProgressRing = ({ value, size = 100, strokeWidth = 8 }) => {
   );
 };
 
-const ProgressCard = () => {
+const ProgressCard = ({ summary, status, error }) => {
+  const overallProgress = Number(summary?.overallProgress) || 0;
+  const practicedLessons = Number(summary?.practicedLessons) || 0;
+  const completedLessons = Number(summary?.completedLessons) || 0;
+  const weakLessons = Number(summary?.weakLessons) || 0;
+  const metrics = [
+    { label: 'Syllabus mastery', value: `${overallProgress}%`, valueClassName: 'text-primary' },
+    { label: 'Practiced lessons', value: practicedLessons, valueClassName: 'text-accent' },
+    { label: 'Completed lessons', value: completedLessons, valueClassName: 'text-primary' },
+    { label: 'Weak lessons', value: weakLessons, valueClassName: 'text-primary' },
+  ];
+
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 d-flex flex-row align-items-center gap-4 h-100 card-hover-effect">
-      <div className="flex-shrink-0">
-        <ProgressRing value={80} />
-      </div>
-      <div className="flex-1 vstack gap-3 w-100">
-        <h3 className="text-lg-custom fw-bold text-primary d-flex align-items-center gap-2">
-          📈 Your Progress
-        </h3>
-        <div className="vstack gap-2">
-          <div className="d-flex justify-content-between small">
-            <span className="text-secondary">Syllabus completed</span>
-            <span className="fw-semibold text-primary">80%</span>
-          </div>
-          <div className="d-flex justify-content-between small">
-            <span className="text-secondary">Consistency</span>
-            <span className="fw-semibold text-accent">Good</span>
-          </div>
-          <div className="d-flex justify-content-between small">
-            <span className="text-secondary">Weekly streak</span>
-            <span className="fw-semibold text-primary">5 days</span>
-          </div>
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 card-hover-effect">
+      <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center gap-4">
+        <div className="flex-shrink-0 align-self-center align-self-lg-auto">
+          <ProgressRing value={overallProgress} />
+        </div>
+
+        <div className="flex-grow-1 w-100">
+          <h3 className="text-lg-custom fw-bold text-primary mb-3">
+            Your Progress
+          </h3>
+
+          {status === 'loading' && <div className="text-secondary small">Refreshing your mastery progress…</div>}
+          {status === 'error' && <div className="text-danger small">{error || 'Progress could not be loaded.'}</div>}
+
+          {status !== 'loading' && status !== 'error' && (
+            <div className="row g-3">
+              {metrics.map((metric) => (
+                <div key={metric.label} className="col-12 col-sm-6 col-xl-3">
+                  <div className="h-100 bg-gray-50 rounded-4 border border-gray-100 p-3">
+                    <div className="small text-secondary mb-2">{metric.label}</div>
+                    <div className={`fs-4 fw-bold ${metric.valueClassName}`}>{metric.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
