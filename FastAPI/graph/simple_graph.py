@@ -34,7 +34,8 @@ MAX_RECENT_MESSAGE_CHARS = 4500
 MAX_SUMMARY_BATCH_CHARS = 2600
 MAX_CHUNK_CHARS = 900
 MIN_CHUNK_CHARS = 260
-AUTO_IMAGE_MAX = 1
+AUTO_IMAGE_MAX = 2
+IMAGE_CANDIDATE_MAX = 5
 
 VISUAL_SUPPORT_HINTS = {
     "diagram",
@@ -70,6 +71,7 @@ BASE_PROMPT = (
     "When the lesson is fully covered, reply exactly: Done\n"
     "Only call fetch_relevant_lesson_images when a visual explanation would genuinely help.\n"
     "If images are shown, the UI will render them inside your reply bubble automatically.\n"
+    "The system may also check the lesson image database after every reply and attach relevant visuals automatically.\n"
     "Do not get stuck on one chunk by asking very similar tiny questions again and again.\n"
     "Never output raw URLs, markdown image tags, JSON, or tool details in the reply."
 )
@@ -1502,6 +1504,61 @@ def extract_selected_images_from_tool_messages(messages):
     return selected_images
 
 
+def merge_selected_images(*groups, max_images=AUTO_IMAGE_MAX):
+    merged = []
+    seen_ids = set()
+
+    for group in groups:
+        for item in group or []:
+            if not isinstance(item, dict):
+                continue
+            image_id = str(item.get("image_id") or "").strip()
+            if not image_id or image_id in seen_ids:
+                continue
+            seen_ids.add(image_id)
+            merged.append(
+                {
+                    "image_id": image_id,
+                    "description": str(item.get("description") or "").strip(),
+                    "topics": normalize_topics(item.get("topics")),
+                }
+            )
+            if len(merged) >= max_images:
+                return merged
+
+    return merged
+
+
+def build_image_candidates_for_reply(chapter_name, lesson_name, response_text, user_text, current_chunk, tool_selected_images=None):
+    images = load_images_from_database(chapter_name, lesson_name)
+    if not images:
+        return []
+
+    primary_query = "\n".join(part for part in [response_text, user_text] if part).strip()
+    fallback_query = "\n".join(part for part in [response_text, user_text, current_chunk] if part).strip()
+
+    primary_matches = []
+    fallback_matches = []
+
+    if primary_query:
+        primary_matches = [
+            compact_image_metadata(image)
+            for image in select_relevant_images(primary_query, images, IMAGE_CANDIDATE_MAX)
+        ]
+
+    if fallback_query:
+        fallback_matches = [
+            compact_image_metadata(image)
+            for image in select_relevant_images(fallback_query, images, IMAGE_CANDIDATE_MAX)
+        ]
+
+    if not primary_matches and not fallback_matches:
+        if chunk_needs_visual_support(current_chunk) or query_requests_visual(primary_query) or query_requests_visual(fallback_query):
+            fallback_matches = [compact_image_metadata(image) for image in images[:AUTO_IMAGE_MAX]]
+
+    return merge_selected_images(tool_selected_images, primary_matches, fallback_matches, max_images=IMAGE_CANDIDATE_MAX)
+
+
 def fallback_inline_image_description(raw_description):
     text = re.sub(r"\s+", " ", str(raw_description or "").strip())
     if not text:
@@ -1569,38 +1626,97 @@ def rewrite_image_descriptions_for_display(llm, chapter_name, lesson_name, respo
     return rewritten
 
 
-def auto_select_supporting_images(chapter_name, lesson_name, current_chunk, response_text, user_text, current_chunk_turns):
-    if current_chunk_turns != 1:
-        return []
+def enhance_response_with_lesson_images(
+    llm,
+    chapter_name,
+    lesson_name,
+    user_text,
+    response_text,
+    current_chunk,
+    candidate_images,
+):
+    if response_text == "Done" or not candidate_images:
+        return {
+            "response": response_text,
+            "selected_images": [],
+        }
 
-    images = load_images_from_database(chapter_name, lesson_name)
-    if not images:
-        return []
+    payload = call_llm_for_json(
+        llm=llm,
+        system_prompt=(
+            "You are improving a tutor reply after checking lesson images from the database.\n"
+            "Return only valid JSON with this shape:\n"
+            '{"response":"string","selected_images":[{"image_id":"string","description":"string"}]}\n'
+            "Rules:\n"
+            "- Select up to 2 images only if they genuinely help explain the current reply.\n"
+            "- If no image helps, return selected_images as [].\n"
+            "- If you select images, revise the response so it naturally references the visual, for example by saying to look at the figure below.\n"
+            "- Keep the same simple Bangla-friendly tutoring style.\n"
+            "- Stay strictly inside the original lesson chunk and original reply scope.\n"
+            "- Do not add new concepts.\n"
+            "- Each selected image description must be short, student-facing, and may use LaTeX notation like $q_1$, $F$, $\\theta$ when useful.\n"
+            "- Do not mention image ids, topics, URLs, or database details.\n"
+            "- The revised response should remain concise."
+        ),
+        user_prompt=(
+            f"Chapter: {chapter_name}\n"
+            f"Lesson: {lesson_name}\n\n"
+            f"Student message:\n{user_text}\n\n"
+            f"Current lesson chunk:\n{current_chunk}\n\n"
+            f"Original tutor reply:\n{response_text}\n\n"
+            f"Candidate lesson images:\n{json.dumps(candidate_images, ensure_ascii=False)}"
+        ),
+    )
 
-    query_text = "\n".join(part for part in [current_chunk, response_text, user_text] if part)
-    selected = select_relevant_images(query_text=query_text, images=images, max_images=AUTO_IMAGE_MAX)
-    if selected:
-        return [compact_image_metadata(image) for image in selected]
+    if not isinstance(payload, dict):
+        return {
+            "response": response_text,
+            "selected_images": [],
+        }
 
-    if chunk_needs_visual_support(current_chunk) or query_requests_visual(response_text):
-        return [compact_image_metadata(image) for image in images[:AUTO_IMAGE_MAX]]
+    revised_response = str(payload.get("response") or "").strip() or response_text
+    selected_images = []
+    seen_ids = set()
 
-    return []
+    for item in payload.get("selected_images") or []:
+        if not isinstance(item, dict):
+            continue
+        image_id = str(item.get("image_id") or "").strip()
+        if not image_id or image_id in seen_ids:
+            continue
+        seen_ids.add(image_id)
+        selected_images.append(
+            {
+                "image_id": image_id,
+                "description": str(item.get("description") or "").strip(),
+                "topics": [],
+            }
+        )
+        if len(selected_images) >= AUTO_IMAGE_MAX:
+            break
+
+    return {
+        "response": revised_response,
+        "selected_images": selected_images,
+    }
 
 
 def resolve_images_for_response(chapter_name, lesson_name, selected_images, response_text="", current_chunk=""):
     if not selected_images:
         return []
 
-    llm = get_llm()
-    rewritten_descriptions = rewrite_image_descriptions_for_display(
-        llm=llm,
-        chapter_name=chapter_name,
-        lesson_name=lesson_name,
-        response_text=response_text,
-        current_chunk=current_chunk,
-        selected_images=selected_images,
-    )
+    rewritten_descriptions = {}
+    needs_description_rewrite = any(not str(item.get("description") or "").strip() for item in selected_images)
+    if needs_description_rewrite:
+        llm = get_llm()
+        rewritten_descriptions = rewrite_image_descriptions_for_display(
+            llm=llm,
+            chapter_name=chapter_name,
+            lesson_name=lesson_name,
+            response_text=response_text,
+            current_chunk=current_chunk,
+            selected_images=selected_images,
+        )
 
     catalog = {
         image["image_id"]: image
@@ -1613,8 +1729,10 @@ def resolve_images_for_response(chapter_name, lesson_name, selected_images, resp
         if not catalog_item:
             continue
 
-        display_description = rewritten_descriptions.get(item.get("image_id")) or fallback_inline_image_description(
-            item.get("description") or catalog_item["description"]
+        display_description = (
+            str(item.get("description") or "").strip()
+            or rewritten_descriptions.get(item.get("image_id"))
+            or fallback_inline_image_description(item.get("description") or catalog_item["description"])
         )
         resolved.append(
             {
@@ -1678,18 +1796,32 @@ def run_chat(thread_id, chapter_name, lesson_name, lesson_text, history, user_te
     last_ai = latest_ai_message(turn_messages) or latest_ai_message(state.get("messages"))
     response_text = extract_text_content(getattr(last_ai, "content", ""))
     current_chunk = get_current_chunk_text(state)
-    current_chunk_turns = int(state.get("current_chunk_turns") or 0)
 
-    selected_images = extract_selected_images_from_tool_messages(turn_messages)
+    tool_selected_images = extract_selected_images_from_tool_messages(turn_messages)
+    candidate_images = build_image_candidates_for_reply(
+        chapter_name=chapter_name,
+        lesson_name=lesson_name,
+        response_text=response_text,
+        user_text=user_text,
+        current_chunk=current_chunk,
+        tool_selected_images=tool_selected_images,
+    )
+
+    enhanced = enhance_response_with_lesson_images(
+        llm=llm,
+        chapter_name=chapter_name,
+        lesson_name=lesson_name,
+        user_text=user_text,
+        response_text=response_text,
+        current_chunk=current_chunk,
+        candidate_images=candidate_images,
+    )
+
+    response_text = str(enhanced.get("response") or "").strip() or response_text
+    selected_images = enhanced.get("selected_images") or []
     if not selected_images:
-        selected_images = auto_select_supporting_images(
-            chapter_name=chapter_name,
-            lesson_name=lesson_name,
-            current_chunk=current_chunk,
-            response_text=response_text,
-            user_text=user_text,
-            current_chunk_turns=current_chunk_turns,
-        )
+        selected_images = tool_selected_images
+
     response_images = resolve_images_for_response(
         chapter_name=chapter_name,
         lesson_name=lesson_name,
