@@ -3,14 +3,28 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { useAuth } from '../auth/AuthContext.jsx';
 
+const createClearedMessages = () => ([
+  {
+    id: crypto.randomUUID(),
+    sender: 'ai',
+    text: 'Ask your question here.',
+    images: [],
+  },
+]);
+
 const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
   const { token, user } = useAuth();
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const scrollRef = useRef(null);
 
   const safeMessages = messages || [];
-  const canSend = useMemo(() => !isSending && draft.trim().length > 0, [isSending, draft]);
+  const canSend = useMemo(() => !isSending && !isClearing && draft.trim().length > 0, [isSending, isClearing, draft]);
+  const canClear = useMemo(
+    () => Boolean(!isSending && !isClearing && user?.id && chapterName && lessonName),
+    [isSending, isClearing, user?.id, chapterName, lessonName],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
@@ -84,10 +98,65 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
     }
   };
 
+  const clearChatHistory = async () => {
+    if (!canClear) return;
+
+    const confirmed = window.confirm(`Delete the chat history for "${lessonName}"?`);
+    if (!confirmed) return;
+
+    setIsClearing(true);
+
+    try {
+      const res = await fetch('/api/chat/history', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          chapterName,
+          lessonName,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.deleted) {
+        throw new Error(data?.message || 'Failed to delete chat history');
+      }
+
+      setMessages(createClearedMessages());
+      setDraft('');
+    } catch (err) {
+      window.alert(err?.message || 'Failed to delete chat history');
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   return (
     <div className="d-flex flex-column h-100 bg-background position-relative">
+      <div className="px-4 px-md-5 px-lg-5 pt-4 pb-2">
+        <div
+          className="container-sm mw-100 d-flex align-items-center justify-content-between gap-3"
+          style={{ maxWidth: '48rem' }}
+        >
+          <div className="min-w-0">
+            <div className="small text-secondary">Lesson chat</div>
+            <div className="fw-semibold text-primary text-truncate">{lessonName || 'Select a lesson'}</div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-danger flex-shrink-0"
+            onClick={clearChatHistory}
+            disabled={!canClear}
+          >
+            {isClearing ? 'Deleting…' : 'Clear chat'}
+          </button>
+        </div>
+      </div>
+
       {/* Messages Area - Scrollable */}
-      <div className="flex-grow-1 overflow-y-auto px-4 px-md-5 px-lg-5 py-4 vstack gap-4 custom-scrollbar">
+      <div className="flex-grow-1 overflow-y-auto px-4 px-md-5 px-lg-5 py-2 vstack gap-4 custom-scrollbar">
         <div className="container-sm mw-100 vstack gap-4 pb-4" style={{ maxWidth: '48rem' }}>
           {safeMessages.map((m) => (
             <ChatMessage key={m.id} sender={m.sender} text={m.text} images={m.images} />
@@ -103,7 +172,7 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
               value={draft}
               onChange={setDraft}
               onSend={send}
-              disabled={isSending}
+              disabled={isSending || isClearing}
             />
          </div>
       </div>
