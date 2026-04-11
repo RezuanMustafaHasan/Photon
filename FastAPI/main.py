@@ -33,7 +33,7 @@ def load_env_file(env_path):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_env_file(os.path.join(BASE_DIR, ".env"))
 
-from graph.simple_graph import run_chat, configure_image_loader
+from graph.simple_graph import run_chat, configure_image_loader, delete_chat_thread
 from graph.exam_analysis import analyze_exam_attempt
 from graph.exam_generator import generate_exam
 
@@ -59,6 +59,12 @@ class ChatRequest(BaseModel):
     lesson_name: str
 
 
+class ChatThreadRequest(BaseModel):
+    user_id: str
+    chapter_name: str
+    lesson_name: str
+
+
 class ChatImage(BaseModel):
     imageURL: str
     description: str = ""
@@ -72,6 +78,10 @@ class ChatResponse(BaseModel):
 
 class HistoryResponse(BaseModel):
     history: list
+
+
+class DeleteChatResponse(BaseModel):
+    deleted: bool
 
 
 class ExamSelection(BaseModel):
@@ -153,8 +163,12 @@ async def chat(payload: ChatRequest):
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
-    history = load_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name)
-    lesson_text = json.dumps(lesson, ensure_ascii=False)
+    chat_record = load_chat_record(payload.user_id, payload.chapter_name, payload.lesson_name)
+    history = chat_record["history"]
+    saved_thread_state = chat_record["thread_state"]
+    lesson_text = str(lesson.get("content") or "").strip()
+    if not lesson_text:
+        raise HTTPException(status_code=404, detail="Lesson content not found")
     thread_id = f"{payload.user_id}:{payload.chapter_name}:{payload.lesson_name}"
     try:
         response_payload = run_chat(
@@ -164,12 +178,14 @@ async def chat(payload: ChatRequest):
             lesson_text=lesson_text,
             history=history,
             user_text=payload.message,
+            saved_thread_state=saved_thread_state,
         )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
     response_text = str(response_payload.get("response") or "")
     response_images = response_payload.get("images") or []
+    thread_state = response_payload.get("thread_state") or {}
     if not isinstance(response_images, list):
         response_images = []
 
@@ -183,7 +199,13 @@ async def chat(payload: ChatRequest):
         assistant_entry["images"] = response_images
 
     history.append(assistant_entry)
-    save_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name, history)
+    save_chat_thread(
+        payload.user_id,
+        payload.chapter_name,
+        payload.lesson_name,
+        history,
+        thread_state,
+    )
     return ChatResponse(response=response_text, images=response_images)
 
 
@@ -193,6 +215,17 @@ async def history(user_id: str, chapter_name: str, lesson_name: str):
         raise HTTPException(status_code=400, detail="user_id, chapter_name, lesson_name are required")
     history_data = load_chat_history(user_id, chapter_name, lesson_name)
     return HistoryResponse(history=history_data)
+
+
+@app.delete("/chat/history", response_model=DeleteChatResponse)
+async def delete_chat_history(payload: ChatThreadRequest):
+    if not payload.user_id or not payload.chapter_name or not payload.lesson_name:
+        raise HTTPException(status_code=400, detail="user_id, chapter_name, lesson_name are required")
+
+    delete_chat_record(payload.user_id, payload.chapter_name, payload.lesson_name)
+    thread_id = f"{payload.user_id}:{payload.chapter_name}:{payload.lesson_name}"
+    delete_chat_thread(thread_id)
+    return DeleteChatResponse(deleted=True)
 
 
 @app.post("/exam/generate", response_model=ExamGenerateResponse)
@@ -394,19 +427,46 @@ def parse_user_id(user_id):
         return user_id
 
 
-def load_chat_history(user_id, chapter_name, lesson_name):
+def load_chat_record(user_id, chapter_name, lesson_name):
     key = parse_user_id(user_id)
     doc = db["chats"].find_one(
         {"user_id": key, "chapter_name": chapter_name, "lesson_name": lesson_name}
     ) or {}
+
     history = doc.get("history") or []
-    return history if isinstance(history, list) else []
+    if not isinstance(history, list):
+        history = []
+
+    thread_state = doc.get("thread_state") or {}
+    if not isinstance(thread_state, dict):
+        thread_state = {}
+
+    return {
+        "history": history,
+        "thread_state": thread_state,
+    }
 
 
-def save_chat_history(user_id, chapter_name, lesson_name, history):
+def load_chat_history(user_id, chapter_name, lesson_name):
+    return load_chat_record(user_id, chapter_name, lesson_name)["history"]
+
+
+def save_chat_thread(user_id, chapter_name, lesson_name, history, thread_state):
     key = parse_user_id(user_id)
     db["chats"].update_one(
         {"user_id": key, "chapter_name": chapter_name, "lesson_name": lesson_name},
-        {"$set": {"history": history}},
+        {
+            "$set": {
+                "history": history,
+                "thread_state": thread_state if isinstance(thread_state, dict) else {},
+            }
+        },
         upsert=True,
+    )
+
+
+def delete_chat_record(user_id, chapter_name, lesson_name):
+    key = parse_user_id(user_id)
+    db["chats"].delete_one(
+        {"user_id": key, "chapter_name": chapter_name, "lesson_name": lesson_name}
     )

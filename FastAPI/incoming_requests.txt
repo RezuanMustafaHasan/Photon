@@ -1,2 +1,16 @@
 Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
 Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"negative","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"voltage of both point is equal","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"height is equal","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"kom bivober dike","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"তাপমাত্রার পার্থক্য","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"na","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"পৃথিবী থেকে","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"start. \nExplain using images for better understanding","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"B er dike","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}

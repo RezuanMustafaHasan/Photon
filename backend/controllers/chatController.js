@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 const FASTAPI_CHAT_URL = `${FASTAPI_BASE_URL}/chat`;
+const FASTAPI_CHAT_HISTORY_URL = `${FASTAPI_BASE_URL}/chat/history`;
 
 const getDb = async () => {
   if (mongoose.connection.readyState !== 1) {
@@ -95,5 +96,44 @@ export const history = async (req, res) => {
     res.json({ history: Array.isArray(doc?.history) ? doc.history : [] });
   } catch {
     res.status(500).json({ message: 'Failed to load history' });
+  }
+};
+
+export const clearHistory = async (req, res) => {
+  const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+  const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
+  const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
+
+  if (!userId || !chapterName || !lessonName) {
+    res.status(400).json({ message: 'userId, chapterName, lessonName are required' });
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const upstream = await fetch(FASTAPI_CHAT_HISTORY_URL, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        chapter_name: chapterName,
+        lesson_name: lessonName,
+      }),
+      signal: controller.signal,
+    });
+
+    const data = await upstream.json().catch(() => null);
+    if (!upstream.ok) {
+      res.status(502).json({ message: data?.detail || data?.message || 'Upstream error' });
+      return;
+    }
+
+    res.json({ deleted: Boolean(data?.deleted) });
+  } catch {
+    res.status(502).json({ message: 'FastAPI is unreachable' });
+  } finally {
+    clearTimeout(timeoutId);
   }
 };

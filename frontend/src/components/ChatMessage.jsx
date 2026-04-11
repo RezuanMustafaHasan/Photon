@@ -4,6 +4,16 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 
+const normalizeMarkdownWithMath = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  return value
+    .replace(/\\\[((?:.|\n)*?)\\\]/g, (_, inner) => `$$\n${inner}\n$$`)
+    .replace(/\\\((.*?)\\\)/g, (_, inner) => `$${inner}$`);
+};
+
 const ChatMessage = ({ sender, text, label, images }) => {
   const isAI = sender === 'ai';
   const isString = typeof text === 'string';
@@ -11,11 +21,7 @@ const ChatMessage = ({ sender, text, label, images }) => {
     ? images.filter((item) => typeof item?.imageURL === 'string' && item.imageURL.trim().length > 0)
     : [];
 
-  const normalized = isString
-    ? text
-        .replace(/\\\[((?:.|\n)*?)\\\]/g, (_, inner) => `$$\n${inner}\n$$`)
-        .replace(/\\\((.*?)\\\)/g, (_, inner) => `$${inner}$`)
-    : text;
+  const normalized = isString ? normalizeMarkdownWithMath(text) : text;
 
   return (
     <div className={`d-flex flex-column ${isAI ? 'align-items-start' : 'align-items-end'} mb-4`}>
@@ -44,42 +50,52 @@ const ChatMessage = ({ sender, text, label, images }) => {
         ) : (
           normalized
         )}
-      </div>
-
-      {isAI && safeImages.length > 0 && (
-        <div className="mt-3 w-100 vstack gap-3" style={{ maxWidth: '80%' }}>
-          {safeImages.map((image, index) => {
-            const topics = Array.isArray(image.topic) ? image.topic.filter(Boolean) : [];
-            return (
-              <figure key={`${image.imageURL}-${index}`} className="bg-white border border-orange-100 rounded-2xl p-2 mb-0 shadow-sm">
-                <a href={image.imageURL} target="_blank" rel="noreferrer" className="d-block text-decoration-none">
-                  <img
-                    src={image.imageURL}
-                    alt={image.description || 'Lesson visual'}
-                    loading="lazy"
-                    className="w-100 rounded-xl"
-                    style={{ maxHeight: '18rem', objectFit: 'cover' }}
-                  />
+        {isAI && safeImages.length > 0 && (
+          <div className="mt-3 vstack gap-3">
+            {safeImages.map((image, index) => (
+              <figure
+                key={`${image.imageURL}-${index}`}
+                className="mx-auto mb-0 d-flex flex-column align-items-center"
+                style={{ width: '100%', maxWidth: '26rem' }}
+              >
+                <a
+                  href={image.imageURL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="d-block text-decoration-none w-100"
+                >
+                  <div
+                    className="w-100 rounded-4 overflow-hidden border border-orange-100 bg-orange-50 d-flex justify-content-center align-items-center"
+                    style={{ minHeight: '10rem', maxHeight: '16rem' }}
+                  >
+                    <img
+                      src={image.imageURL}
+                      alt={image.description || 'Lesson visual'}
+                      loading="lazy"
+                      className="w-100 h-100"
+                      style={{ objectFit: 'contain' }}
+                    />
+                  </div>
                 </a>
 
-                {image.description && (
-                  <figcaption className="small text-secondary mt-2">{image.description}</figcaption>
-                )}
-
-                {topics.length > 0 && (
-                  <div className="d-flex flex-wrap gap-2 mt-2">
-                    {topics.map((topic, topicIndex) => (
-                      <span key={`${topic}-${topicIndex}`} className="badge bg-orange-50 text-secondary border border-orange-100">
-                        {topic}
-                      </span>
-                    ))}
-                  </div>
+                {typeof image.description === 'string' && image.description.trim() && (
+                  <figcaption className="small text-secondary mt-2 w-100">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        p: (props) => <p className="mb-0" {...props} />,
+                      }}
+                    >
+                      {normalizeMarkdownWithMath(image.description)}
+                    </ReactMarkdown>
+                  </figcaption>
                 )}
               </figure>
-            );
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
