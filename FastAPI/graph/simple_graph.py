@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
@@ -28,7 +29,11 @@ GROUNDING_SYSTEM_PROMPT = (
     "- Do not secretly mix outside knowledge into textbook_answer.\n"
     "- If the exact answer is not present in the lesson chunks but the question is still physics-related and relevant to the current chapter/topic, answer in extra_explanation using your own physics knowledge.\n"
     "- Keep textbook_answer grounded to the lesson, but let extra_explanation be broader when it helps the student understand.\n"
+    "- Write clean, readable paragraphs and markdown lists. Do not include the literal characters \\n in normal prose.\n"
     "- When you write formulas or symbols, always use Markdown math delimiters: inline $...$ and block $$...$$.\n"
+    "- Because the response is JSON, escape every backslash inside LaTeX so JSON stays valid.\n"
+    "- For multiplied units or symbols, use LaTeX operators like \\cdot and \\times inside math, not Unicode characters like · or ×.\n"
+    "- When writing units such as newton-meter, prefer $N \\cdot m$ instead of text like N·m inside math.\n"
     "- Do not write raw LaTeX commands like \\frac outside math delimiters.\n"
     "- Keep Bangla words outside the math delimiters whenever possible.\n"
     "- When listing formulas, prefer short markdown bullets and wrap each formula in $...$ or $$...$$.\n"
@@ -36,6 +41,28 @@ GROUNDING_SYSTEM_PROMPT = (
     "- Prefer Bangla if the lesson or student message is primarily Bangla; otherwise match the student's language."
 )
 MAX_HISTORY_ITEMS = 8
+INVALID_JSON_BACKSLASH_PATTERN = re.compile(r'(?<!\\)\\(?!["\\/bfnrtu])')
+LATEX_COMMAND_BACKSLASH_PATTERN = re.compile(
+    r'(?<!\\)\\(?=(?:frac|int|sum|sqrt|cdot|times|left|right|vec|hat|theta|phi|pi|alpha|beta|gamma|lambda|mu|nu|rho|sigma|omega|Delta|delta|tau|sin|cos|tan|text|mathrm|mathbf|pm|quad|qquad|leq|geq|neq|approx)\b)'
+)
+LITERAL_NEWLINE_PATTERN = re.compile(r'\\n(?![A-Za-z])')
+LITERAL_TAB_PATTERN = re.compile(r'\\t(?![A-Za-z])')
+
+
+def repair_invalid_json_backslashes(value):
+    text = str(value or "")
+    text = LATEX_COMMAND_BACKSLASH_PATTERN.sub(r"\\\\", text)
+    return INVALID_JSON_BACKSLASH_PATTERN.sub(r"\\\\", text)
+
+
+def normalize_grounded_text(value):
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = LITERAL_NEWLINE_PATTERN.sub("\n", text)
+    text = LITERAL_TAB_PATTERN.sub(" ", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def get_llm():
@@ -46,6 +73,8 @@ def get_llm():
 
 
 def compose_chat_markdown(textbook_answer, extra_explanation, citations):
+    textbook_answer = normalize_grounded_text(textbook_answer)
+    extra_explanation = normalize_grounded_text(extra_explanation)
     parts = []
 
     if textbook_answer:
@@ -147,7 +176,7 @@ def build_grounded_prompt(chapter_name, lesson_name, user_text, retrieval):
 
 def parse_grounded_response(raw_content):
     raw_output = extract_text_content(raw_content)
-    json_text = extract_json_text(raw_output)
+    json_text = repair_invalid_json_backslashes(extract_json_text(raw_output))
 
     try:
         payload = json.loads(json_text)
@@ -157,8 +186,8 @@ def parse_grounded_response(raw_content):
     if not isinstance(payload, dict):
         raise ValueError("The grounded chat payload must be a JSON object.")
 
-    textbook_answer = str(payload.get("textbook_answer") or "").strip()
-    extra_explanation = str(payload.get("extra_explanation") or "").strip()
+    textbook_answer = normalize_grounded_text(payload.get("textbook_answer") or "")
+    extra_explanation = normalize_grounded_text(payload.get("extra_explanation") or "")
 
     if not textbook_answer:
         raise ValueError("The grounded chat payload must contain a textbook_answer.")

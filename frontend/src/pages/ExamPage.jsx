@@ -7,6 +7,7 @@ import { useLocation, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { createRateLimitNotice } from '../utils/rateLimit.js';
+import { normalizeRichText } from '../utils/richText.js';
 
 const QUESTION_COUNT_OPTIONS = [20, 30, 40, 50];
 const MIN_QUESTION_COUNT = 1;
@@ -15,10 +16,6 @@ const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 const BANGLA_REGEX = /[\u0980-\u09FF]/;
 
 const getBanglaClass = (value) => (BANGLA_REGEX.test(String(value || '')) ? 'font-bangla' : '');
-
-const normalizeMathText = (value) => String(value || '')
-  .replace(/\\\[((?:.|\n)*?)\\\]/g, (_, inner) => `$$\n${inner}\n$$`)
-  .replace(/\\\((.*?)\\\)/g, (_, inner) => `$${inner}$`);
 
 const getScoreComment = (percentage) => {
   if (percentage >= 95) return 'Excellent';
@@ -115,13 +112,13 @@ const formatAttemptTitle = (chapterNames) => {
 };
 
 const ExamRichText = ({ text, inline = false }) => {
-  const normalizedText = normalizeMathText(text);
+  const normalizedText = normalizeRichText(text);
 
   return (
     <div className={`exam-rich-text ${inline ? 'exam-rich-text-inline' : ''} ${getBanglaClass(normalizedText)}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { strict: 'ignore', throwOnError: false, errorColor: 'currentColor' }]]}
         components={{
           p: ({ children }) => <p className="mb-0">{children}</p>,
           ul: ({ children }) => <ul className="mb-0 ps-4">{children}</ul>,
@@ -1146,7 +1143,7 @@ const ExamPage = () => {
           <div className="small fw-semibold text-secondary text-uppercase mb-2">AI Performance Summary</div>
           <div className="fw-semibold text-primary mb-2">Analyzing your performance…</div>
           <div className="text-secondary">
-            Photon is reviewing the questions you got wrong and preparing topic-wise suggestions for revision.
+            Photon is reviewing the questions you got wrong and preparing topic-wise follow-up suggestions.
           </div>
         </div>
       );
@@ -1214,11 +1211,11 @@ const ExamPage = () => {
                   <div className={`text-secondary ${getBanglaClass(topic.reason)}`}>{topic.reason}</div>
                 </div>
               ))}
-            </div>
-          ) : (
-            <div className="text-secondary">No extra revision topics were recommended for this attempt.</div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="text-secondary">No extra follow-up topics were recommended for this attempt.</div>
+        )}
+      </div>
       </div>
     );
   };

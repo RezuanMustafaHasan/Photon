@@ -1,12 +1,20 @@
 import mongoose from 'mongoose';
 import ExamAttempt from '../models/ExamAttempt.js';
 import { recordExamMastery } from '../util/mastery.js';
+import { refreshRevisionTasks } from '../util/revision.js';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 const FASTAPI_EXAM_URL = `${FASTAPI_BASE_URL}/exam/generate`;
 const FASTAPI_ANALYZE_URL = `${FASTAPI_BASE_URL}/exam/analyze`;
 const MIN_QUESTION_COUNT = 1;
 const MAX_QUESTION_COUNT = 50;
+
+const logBestEffortError = (label, error) => {
+  if (error?.name === 'MongoClientClosedError') {
+    return;
+  }
+  console.error(label, error);
+};
 
 const normalizeTitle = (value) => String(value || '').trim().toLowerCase();
 
@@ -337,9 +345,11 @@ export const completeExam = async (req, res) => {
       userId: req.userId,
       questions,
       answers,
-    }).catch((error) => {
-      console.error('Mastery exam signal error:', error);
-    });
+    })
+      .then(() => refreshRevisionTasks({ userId: req.userId }))
+      .catch((error) => {
+        logBestEffortError('Mastery exam signal error:', error);
+      });
 
     res.status(201).json({ attempt: formatAttemptDetail(attempt) });
   } catch {

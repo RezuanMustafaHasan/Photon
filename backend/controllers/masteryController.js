@@ -1,6 +1,13 @@
 import { getMasterySummary, recordLessonActivity } from '../util/mastery.js';
+import { refreshRevisionTasks } from '../util/revision.js';
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+const logBestEffortError = (label, error) => {
+  if (error?.name === 'MongoClientClosedError') {
+    return;
+  }
+  console.error(label, error);
+};
 
 export const getSummary = async (req, res) => {
   try {
@@ -27,12 +34,18 @@ export const saveLessonActivity = async (req, res) => {
   }
 
   try {
-    await recordLessonActivity({
+    const activity = await recordLessonActivity({
       userId: req.userId,
       chapterName,
       lessonName,
       seconds,
     });
+
+    if (activity) {
+      refreshRevisionTasks({ userId: req.userId }).catch((error) => {
+        logBestEffortError('Revision refresh after lesson activity error:', error);
+      });
+    }
 
     res.status(202).json({ ok: true });
   } catch {

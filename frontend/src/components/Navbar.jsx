@@ -32,7 +32,7 @@ const Navbar = ({ examPrefillChapter = '' }) => {
       <div className="d-none d-md-flex align-items-center gap-1 bg-gray-50 p-1 rounded-pill border border-gray-100">
         <NavItem active={isDashboardActive} onClick={() => navigate('/dashboard')}>Dashboard</NavItem>
         <NavItem disabled>Admission</NavItem>
-        <NavItem disabled>Revision</NavItem>
+        <NavItem disabled>Study Flow</NavItem>
         <NavItem active={isExamActive} onClick={navigateToExam}>Exam</NavItem>
       </div>
 

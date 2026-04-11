@@ -1,15 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import AISuggestionCard from '../components/AISuggestionCard';
 import ProgressCard from '../components/ProgressCard';
 import ChapterGrid from '../components/ChapterGrid';
+import RecentStudyPanel from '../components/RecentStudyPanel';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { createRateLimitNotice } from '../utils/rateLimit.js';
-import { fetchMasterySummary, getRecommendedLessonNames } from '../utils/mastery.js';
+import { fetchMasterySummary } from '../utils/mastery.js';
 
 const Dashboard = ({ onChapterClick }) => {
-  const navigate = useNavigate();
   const { token, showRateLimitNotice } = useAuth();
   const [summary, setSummary] = useState(null);
   const [status, setStatus] = useState(token ? 'loading' : 'idle');
@@ -66,9 +64,9 @@ const Dashboard = ({ onChapterClick }) => {
     };
   }, [showRateLimitNotice, token]);
 
-  const handleStartRevision = useCallback(() => {
-    const chapterName = summary?.nextStep?.chapterName;
-    const lessonName = summary?.nextStep?.lessonName;
+  const handleResumeLesson = useCallback((lesson) => {
+    const chapterName = lesson?.chapterName;
+    const lessonName = lesson?.lessonName;
     if (!chapterName) {
       return;
     }
@@ -77,52 +75,36 @@ const Dashboard = ({ onChapterClick }) => {
       localStorage.setItem(`photon_last_lesson_${chapterName}`, lessonName);
     }
     onChapterClick(chapterName);
-  }, [onChapterClick, summary]);
-
-  const handlePracticeWeakTopics = useCallback(() => {
-    const chapterName = summary?.recommendedExam?.chapterName;
-    const lessonNames = getRecommendedLessonNames(summary);
-    if (!chapterName || !lessonNames.length) {
-      return;
-    }
-
-    navigate(`/exam?chapter=${encodeURIComponent(chapterName)}`, {
-      state: {
-        recommendedExam: {
-          chapterName,
-          lessonNames,
-        },
-      },
-    });
-  }, [navigate, summary]);
+  }, [onChapterClick]);
 
   return (
     <div className="min-h-screen bg-background pb-5">
       <Navbar />
 
-      <main className="container-xl px-4 px-sm-5 py-5">
-        <div className="row g-4 mb-4">
-          <div className="col-lg-8">
-            <AISuggestionCard
-              summary={summary}
+      <main className="container-xl px-4 px-sm-5 py-4">
+        <div className="mb-4">
+          <ProgressCard summary={summary} status={status} error={error} />
+        </div>
+
+        <div className="row g-4 align-items-start">
+          <div className="col-xl-8">
+            <ChapterGrid
+              chapters={Array.isArray(summary?.chapterProgress) ? summary.chapterProgress : []}
               status={status}
               error={error}
-              onStartRevision={handleStartRevision}
-              onPracticeWeakTopics={handlePracticeWeakTopics}
+              onChapterClick={onChapterClick}
             />
           </div>
 
-          <div className="col-lg-4">
-            <ProgressCard summary={summary} status={status} error={error} />
+          <div className="col-xl-4">
+            <RecentStudyPanel
+              summary={summary}
+              status={status}
+              error={error}
+              onResumeLesson={handleResumeLesson}
+            />
           </div>
         </div>
-
-        <ChapterGrid
-          chapters={Array.isArray(summary?.chapterProgress) ? summary.chapterProgress : []}
-          status={status}
-          error={error}
-          onChapterClick={onChapterClick}
-        />
       </main>
     </div>
   );

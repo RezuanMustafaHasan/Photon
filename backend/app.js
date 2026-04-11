@@ -5,6 +5,7 @@ import createChatRouter from './routes/chatRoutes.js';
 import createChapterRouter from './routes/chapterRoutes.js';
 import createExamRouter from './routes/examRoutes.js';
 import createMasteryRouter from './routes/masteryRoutes.js';
+import createRevisionRouter from './routes/revisionRoutes.js';
 import { createRateLimiters } from './middleware/rateLimiters.js';
 
 const parseTrustProxy = (value) => {
@@ -58,6 +59,7 @@ export const createApp = ({ rateLimit = {} } = {}) => {
     examCompleteLimiter: limiters.examCompleteLimiter,
   }));
   app.use('/api/mastery', createMasteryRouter());
+  app.use('/api/revision', createRevisionRouter());
 
   return app;
 };

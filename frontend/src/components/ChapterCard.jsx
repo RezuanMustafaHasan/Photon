@@ -10,23 +10,8 @@ const ChapterCard = ({ title, status, progress, locked, onClick }) => {
       onClick={onClick}
       className={`bg-white rounded-xl p-4 border border-gray-100 shadow-sm transition-all duration-300 hover-translate-y h-100 d-flex flex-column ${isLocked ? 'opacity-70 grayscale-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
-      <div className="d-flex justify-content-between align-items-start mb-4">
-        <h4 className="fw-bold fs-5 text-primary font-bangla lh-sm">{title}</h4>
-        {isCompleted && (
-          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs fw-bold rounded-3 flex-shrink-0 d-flex align-items-center gap-1">
-            ✅ <span className="d-none d-sm-inline">Done</span>
-          </span>
-        )}
-        {isWeak && (
-          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs fw-bold rounded-3 flex-shrink-0 d-flex align-items-center gap-1">
-            ⚠️ <span className="d-none d-sm-inline">Weak</span>
-          </span>
-        )}
-        {isLocked && (
-          <span className="p-1 bg-gray-100 text-gray-500 rounded-3 flex-shrink-0">
-            🔒
-          </span>
-        )}
+      <div className="mb-4">
+        <h4 className="fw-bold fs-5 text-primary font-bangla lh-sm mb-0">{title}</h4>
       </div>
 
       <div className="mt-auto vstack gap-3">
@@ -61,7 +46,7 @@ const ChapterCard = ({ title, status, progress, locked, onClick }) => {
               : 'bg-primary text-white hover-bg-gray-800 shadow-sm border-0'
           }`}
         >
-          {isCompleted ? 'Revise' : isWeak ? 'Improve Now' : isLocked ? 'Locked' : 'Continue'}
+          {isCompleted ? 'Revisit' : isWeak ? 'Focus Now' : isLocked ? 'Locked' : 'Open Chapter'}
         </button>
       </div>
     </div>

@@ -34,7 +34,7 @@ except ModuleNotFoundError:
     sys.modules["langchain_core.messages"] = langchain_core_messages
     sys.modules["langchain_groq"] = langchain_groq_module
 
-from graph.simple_graph import compose_chat_markdown, run_chat
+from graph.simple_graph import compose_chat_markdown, parse_grounded_response, run_chat
 
 
 class FakeLLM:
@@ -148,6 +148,22 @@ class SimpleGraphTests(unittest.TestCase):
         self.assertEqual(len(result["citations"]), 1)
         self.assertEqual(result["citations"][0]["lesson_name"], "Electric Field")
         self.assertEqual(result["citations"][0]["snippet"], "")
+
+    def test_parse_grounded_response_repairs_unescaped_latex_commands(self):
+        parsed = parse_grounded_response(
+            r'{"textbook_answer":"\tau = rF\sin\theta","extra_explanation":"\text{Unit} = \text{N·m}"}'
+        )
+
+        self.assertEqual(parsed["textbook_answer"], r"\tau = rF\sin\theta")
+        self.assertEqual(parsed["extra_explanation"], r"\text{Unit} = \text{N·m}")
+
+    def test_parse_grounded_response_turns_literal_newlines_into_real_breaks(self):
+        parsed = parse_grounded_response(
+            '{"textbook_answer":"প্রধান ধারণা\\\\n\\\\n- প্রথম পয়েন্ট","extra_explanation":"আরও\\\\nসহজভাবে"}'
+        )
+
+        self.assertEqual(parsed["textbook_answer"], "প্রধান ধারণা\n\n- প্রথম পয়েন্ট")
+        self.assertEqual(parsed["extra_explanation"], "আরও\nসহজভাবে")
 
 
 if __name__ == "__main__":

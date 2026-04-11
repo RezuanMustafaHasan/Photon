@@ -1,8 +1,16 @@
 import mongoose from 'mongoose';
 import { recordChatConfusion } from '../util/mastery.js';
+import { refreshRevisionTasks } from '../util/revision.js';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 const FASTAPI_CHAT_URL = `${FASTAPI_BASE_URL}/chat`;
+
+const logBestEffortError = (label, error) => {
+  if (error?.name === 'MongoClientClosedError') {
+    return;
+  }
+  console.error(label, error);
+};
 
 const getDb = async () => {
   if (mongoose.connection.readyState !== 1) {
@@ -121,8 +129,13 @@ export const chat = async (req, res) => {
       chapterName,
       lessonName,
       message,
+    }).then((changed) => {
+      if (changed) {
+        return refreshRevisionTasks({ userId });
+      }
+      return null;
     }).catch((error) => {
-      console.error('Mastery chat signal error:', error);
+      logBestEffortError('Mastery chat signal error:', error);
     });
 
     res.json(mapUpstreamChatResponse(data));

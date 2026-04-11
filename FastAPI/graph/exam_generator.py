@@ -17,6 +17,8 @@ EXAM_SYSTEM_PROMPT = (
     "Use clean exam formatting: keep questions concise, keep options short, and avoid noisy prefixes like 'Question:' or 'Option A:'.\n"
     "When mathematical symbols, vectors, subscripts, superscripts, fractions, equations, or units need formatting, use LaTeX.\n"
     "Use inline LaTeX with $...$ for inline math and $$...$$ only for standalone equations.\n"
+    "For multiplied units or symbols, use LaTeX operators like \\cdot and \\times inside math, not Unicode characters like · or ×.\n"
+    "When writing units such as newton-meter, prefer $N \\cdot m$ instead of text like N·m inside math.\n"
     "Do not output escaped math delimiters like \\(...\\) or \\[...\\]."
 )
 
@@ -73,6 +75,7 @@ def build_exam_prompt(selected_lessons, question_count, previous_error=None, pre
         "- Do not prefix questions with labels like 'Q', 'Question', or numbering.\n"
         "- Use $...$ for inline formulas, vectors, subscripts, superscripts, Greek symbols, and equations.\n"
         "- Use $$...$$ only when a full equation needs display formatting on its own line.\n"
+        "- Use \\cdot and \\times for multiplied units or terms inside math instead of Unicode symbols like · or ×.\n"
         "- Never output raw escaped delimiters like \\(...\\) or \\[...\\].\n"
         "- Avoid markdown headings, tables, code fences, and decorative symbols.\n"
         "- Output JSON only.\n\n"

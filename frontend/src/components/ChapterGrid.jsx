@@ -5,10 +5,17 @@ const ChapterGrid = ({ chapters, status, error, onChapterClick }) => {
   const safeChapters = Array.isArray(chapters) ? chapters : [];
 
   return (
-    <div className="mt-5">
-      <h2 className="fs-5 fw-bold text-primary mb-4 d-flex align-items-center gap-2">
-        📘 HSC Physics Chapters
-      </h2>
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+          <div className="small fw-semibold text-secondary text-uppercase mb-2">Chapter Access</div>
+          <h2 className="fs-4 fw-bold text-primary mb-1">Jump Into Any Chapter</h2>
+          <div className="text-secondary">Pick a chapter immediately and Photon will reopen your last lesson there.</div>
+        </div>
+        {safeChapters.length > 0 && (
+          <div className="small fw-medium text-secondary">{safeChapters.length} chapters available</div>
+        )}
+      </div>
 
       {status === 'loading' && <div className="text-secondary mb-3">Loading chapter mastery…</div>}
       {status === 'error' && <div className="text-danger mb-3">{error}</div>}

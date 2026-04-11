@@ -283,6 +283,7 @@ export const getMasterySummary = async ({ userId }) => {
         masteryScore,
         status: getMasteryStatus(masteryScore, base),
         hasEvidence: hasEvidence(base),
+        reason: buildReason(base),
       };
     });
 
@@ -305,6 +306,15 @@ export const getMasterySummary = async ({ userId }) => {
         masteryScore: lesson.masteryScore,
         status: lesson.status,
         hasEvidence: lesson.hasEvidence,
+        questionAttempts: lesson.questionAttempts,
+        correctAnswers: lesson.correctAnswers,
+        wrongAnswers: lesson.wrongAnswers,
+        chatConfusionCount: lesson.chatConfusionCount,
+        lessonTimeSeconds: lesson.lessonTimeSeconds,
+        lastActivityAt: lesson.lastActivityAt,
+        lastExamAt: lesson.lastExamAt,
+        lastLessonSeenAt: lesson.lastLessonSeenAt,
+        reason: lesson.reason,
       })),
     };
   });
