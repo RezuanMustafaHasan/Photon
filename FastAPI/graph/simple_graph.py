@@ -5,24 +5,118 @@ import re
 import uuid
 
 from typing import Annotated, Any
-from typing_extensions import TypedDict
 
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    RemoveMessage,
-    SystemMessage,
-    ToolMessage,
-    messages_from_dict,
-    messages_to_dict,
+try:
+    from typing_extensions import TypedDict
+except ModuleNotFoundError:
+    from typing import TypedDict
+
+try:
+    from langchain_core.messages import (
+        AIMessage,
+        BaseMessage,
+        HumanMessage,
+        RemoveMessage,
+        SystemMessage,
+        ToolMessage,
+        messages_from_dict,
+        messages_to_dict,
+    )
+    from langchain_core.tools import tool
+    from langchain_groq import ChatGroq
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.graph import START, StateGraph
+    from langgraph.graph.message import add_messages
+    from langgraph.prebuilt import ToolNode
+except (ImportError, ModuleNotFoundError):
+    class BaseMessage:
+        def __init__(self, content=None, id=None, name=None, **kwargs):
+            del kwargs
+            self.content = content
+            self.id = id
+            self.name = name
+
+    class AIMessage(BaseMessage):
+        pass
+
+    class HumanMessage(BaseMessage):
+        pass
+
+    class SystemMessage(BaseMessage):
+        pass
+
+    class ToolMessage(BaseMessage):
+        pass
+
+    class RemoveMessage(BaseMessage):
+        pass
+
+    def messages_from_dict(_items):
+        return []
+
+    def messages_to_dict(_items):
+        return []
+
+    def tool(_name):
+        def decorator(fn):
+            return fn
+        return decorator
+
+    class ChatGroq:
+        def __init__(self, *args, **kwargs):
+            del args, kwargs
+
+        def bind_tools(self, _tools):
+            return self
+
+        def invoke(self, _messages):
+            raise RuntimeError("ChatGroq is unavailable")
+
+    class MemorySaver:
+        def delete_thread(self, *_args, **_kwargs):
+            return None
+
+    class _GraphStub:
+        def invoke(self, *_args, **_kwargs):
+            raise RuntimeError("langgraph is unavailable")
+
+        def get_state(self, *_args, **_kwargs):
+            return type("Snapshot", (), {"values": {}})()
+
+    class StateGraph:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            pass
+
+        def add_edge(self, *_args, **_kwargs):
+            pass
+
+        def add_conditional_edges(self, *_args, **_kwargs):
+            pass
+
+        def compile(self, **_kwargs):
+            return _GraphStub()
+
+    class ToolNode:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+    START = object()
+
+    def add_messages(existing, incoming):
+        current = list(existing or [])
+        current.extend(incoming or [])
+        return current
+
+from graph.exam_generator import extract_json_text, normalize_error_message
+from graph.lesson_grounding import (
+    lesson_source_label,
+    normalize_lesson_key,
+    retrieve_relevant_lesson_chunks,
+    truncate_text,
 )
-from langchain_core.tools import tool
-from langchain_groq import ChatGroq
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import START, StateGraph
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
 
 
 memory = MemorySaver()
@@ -36,6 +130,40 @@ MAX_CHUNK_CHARS = 900
 MIN_CHUNK_CHARS = 260
 AUTO_IMAGE_MAX = 2
 IMAGE_CANDIDATE_MAX = 5
+MAX_HISTORY_ITEMS = 8
+
+GROUNDING_SYSTEM_PROMPT = (
+    "You are a Bangladeshi HSC physics tutor.\n"
+    "You must respond in valid JSON only, with no markdown fences.\n"
+    "Return this exact schema:\n"
+    "{\n"
+    '  "textbook_answer": "lesson-grounded answer",\n'
+    '  "extra_explanation": "optional extra explanation"\n'
+    "}\n"
+    "Rules:\n"
+    "- textbook_answer must use only the provided lesson chunks.\n"
+    "- If the question is not directly covered by the lesson chunks, say that clearly in textbook_answer.\n"
+    "- extra_explanation is optional, but when used it must be clearly lesson-adjacent intuition, example, or clarification.\n"
+    "- Do not secretly mix outside knowledge into textbook_answer.\n"
+    "- If the exact answer is not present in the lesson chunks but the question is still physics-related and relevant to the current chapter/topic, answer in extra_explanation using your own physics knowledge.\n"
+    "- Keep textbook_answer grounded to the lesson, but let extra_explanation be broader when it helps the student understand.\n"
+    "- Write clean, readable paragraphs and markdown lists. Do not include the literal characters \\n in normal prose.\n"
+    "- When you write formulas or symbols, always use Markdown math delimiters: inline $...$ and block $$...$$.\n"
+    "- Because the response is JSON, escape every backslash inside LaTeX so JSON stays valid.\n"
+    "- For multiplied units or symbols, use LaTeX operators like \\cdot and \\times inside math, not Unicode characters like · or ×.\n"
+    "- When writing units such as newton-meter, prefer $N \\cdot m$ instead of text like N·m inside math.\n"
+    "- Do not write raw LaTeX commands like \\frac outside math delimiters.\n"
+    "- Keep Bangla words outside the math delimiters whenever possible.\n"
+    "- When listing formulas, prefer short markdown bullets and wrap each formula in $...$ or $$...$$.\n"
+    "- Keep the tone simple, student-friendly, and concise.\n"
+    "- Prefer Bangla if the lesson or student message is primarily Bangla; otherwise match the student's language."
+)
+INVALID_JSON_BACKSLASH_PATTERN = re.compile(r'(?<!\\)\\(?!["\\/bfnrtu])')
+LATEX_COMMAND_BACKSLASH_PATTERN = re.compile(
+    r'(?<!\\)\\(?=(?:frac|int|sum|sqrt|cdot|times|left|right|vec|hat|theta|phi|pi|alpha|beta|gamma|lambda|mu|nu|rho|sigma|omega|Delta|delta|tau|sin|cos|tan|text|mathrm|mathbf|pm|quad|qquad|leq|geq|neq|approx)\b)'
+)
+LITERAL_NEWLINE_PATTERN = re.compile(r'\\n(?![A-Za-z])')
+LITERAL_TAB_PATTERN = re.compile(r'\\t(?![A-Za-z])')
 
 VISUAL_SUPPORT_HINTS = {
     "diagram",
@@ -183,6 +311,22 @@ def configure_image_loader(loader):
     lesson_image_loader = loader
 
 
+def repair_invalid_json_backslashes(value):
+    text = str(value or "")
+    text = LATEX_COMMAND_BACKSLASH_PATTERN.sub(r"\\\\", text)
+    return INVALID_JSON_BACKSLASH_PATTERN.sub(r"\\\\", text)
+
+
+def normalize_grounded_text(value):
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = LITERAL_NEWLINE_PATTERN.sub("\n", text)
+    text = LITERAL_TAB_PATTERN.sub(" ", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def get_llm():
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -236,6 +380,40 @@ def parse_json_from_text(raw_text):
             return None
 
     return None
+
+
+def compose_chat_markdown(textbook_answer, extra_explanation, citations):
+    textbook_answer = normalize_grounded_text(textbook_answer)
+    extra_explanation = normalize_grounded_text(extra_explanation)
+    parts = []
+
+    if textbook_answer:
+        parts.append(f"**From your lesson**\n\n{textbook_answer}")
+
+    if extra_explanation:
+        parts.append(f"**Extra explanation**\n\n{extra_explanation}")
+
+    if citations:
+        citation_lines = [
+            f"- {citation['section_label']}"
+            for citation in citations
+            if citation.get("section_label")
+        ]
+        if citation_lines:
+            parts.append("**Sources**\n" + "\n".join(citation_lines))
+
+    return "\n\n".join(part for part in parts if part).strip()
+
+
+def assistant_history_text(item):
+    content = str(item.get("content") or "").strip()
+    if content:
+        return content
+
+    textbook_answer = str(item.get("textbook_answer") or "").strip()
+    extra_explanation = str(item.get("extra_explanation") or "").strip()
+    citations = item.get("citations") if isinstance(item.get("citations"), list) else []
+    return compose_chat_markdown(textbook_answer, extra_explanation, citations)
 
 
 def normalize_topics(value):
@@ -684,6 +862,121 @@ def build_history_messages(history):
             messages.append(HumanMessage(content=content))
 
     return ensure_message_ids(messages, prefix="hist")
+
+
+def build_grounded_history_messages(history):
+    messages = []
+    recent_history = history[-MAX_HISTORY_ITEMS:] if isinstance(history, list) else []
+    for item in recent_history:
+        if not isinstance(item, dict):
+            continue
+
+        role = item.get("role")
+        content = assistant_history_text(item) if role == "assistant" else str(item.get("content") or "").strip()
+        if not content:
+            continue
+
+        if role == "assistant":
+            messages.append(AIMessage(content=content))
+        else:
+            messages.append(HumanMessage(content=content))
+
+    return messages
+
+
+def build_retrieval_query(user_text, history):
+    context_parts = [str(user_text or "").strip()]
+    recent_history = history[-4:] if isinstance(history, list) else []
+    for item in reversed(recent_history):
+        if not isinstance(item, dict):
+            continue
+        content = assistant_history_text(item) if item.get("role") == "assistant" else str(item.get("content") or "").strip()
+        if not content:
+            continue
+        context_parts.append(truncate_text(content, max_length=240))
+        if len(context_parts) >= 3:
+            break
+    return "\n".join(reversed([part for part in context_parts if part]))
+
+
+def build_grounded_prompt(chapter_name, lesson_name, user_text, retrieval):
+    retrieval_mode = retrieval.get("mode", "no_match")
+    chunks = retrieval.get("chunks") or []
+    source_lesson_name = retrieval.get("source_lesson_name") or lesson_name
+
+    if chunks:
+        formatted_chunks = []
+        for index, chunk in enumerate(chunks, start=1):
+            formatted_chunks.append(
+                (
+                    f"[Chunk {index}]\n"
+                    f"Lesson: {chunk.get('lesson_name')}\n"
+                    f"Section: {chunk.get('section_label')}\n"
+                    f"Text:\n{chunk.get('chunk_text')}"
+                )
+            )
+        context_block = "\n\n".join(formatted_chunks)
+    else:
+        context_block = "No directly relevant lesson chunk matched the question."
+
+    return (
+        f"Current lesson:\n"
+        f"- Chapter: {chapter_name}\n"
+        f"- Lesson: {lesson_name}\n"
+        f"- Best matching lesson: {source_lesson_name}\n"
+        f"- Retrieval mode: {retrieval_mode}\n\n"
+        "Use the retrieved lesson chunks below for the grounded answer.\n"
+        "If the best matching lesson is not the current lesson, treat it as a nearby source lesson from the same chapter.\n"
+        "If the lesson does not directly cover the student's question, say that in textbook_answer and keep any broader help in extra_explanation.\n\n"
+        f"Retrieved lesson chunks:\n{context_block}\n\n"
+        f"Student question:\n{user_text}"
+    )
+
+
+def parse_grounded_response(raw_content):
+    raw_output = extract_text_content(raw_content)
+    json_text = repair_invalid_json_backslashes(extract_json_text(raw_output))
+
+    try:
+        payload = json.loads(json_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"The grounded chat JSON is malformed: {exc.msg}.") from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError("The grounded chat payload must be a JSON object.")
+
+    textbook_answer = normalize_grounded_text(payload.get("textbook_answer") or "")
+    extra_explanation = normalize_grounded_text(payload.get("extra_explanation") or "")
+
+    if not textbook_answer:
+        raise ValueError("The grounded chat payload must contain a textbook_answer.")
+
+    return {
+        "textbook_answer": textbook_answer,
+        "extra_explanation": extra_explanation,
+    }
+
+
+def build_citations(chapter_name, lesson_name, retrieval):
+    if retrieval.get("mode") not in {"matched", "intro"}:
+        return []
+
+    source_lesson_name = str(retrieval.get("source_lesson_name") or "").strip()
+    source_chapter_name = str(retrieval.get("source_chapter_name") or chapter_name).strip()
+    if not source_lesson_name:
+        return []
+
+    if normalize_lesson_key(source_lesson_name) == normalize_lesson_key(lesson_name):
+        return []
+
+    return [
+        {
+            "chapter_name": source_chapter_name or chapter_name,
+            "lesson_name": source_lesson_name,
+            "section_label": lesson_source_label(source_chapter_name or chapter_name, source_lesson_name),
+            "snippet": "",
+        }
+    ]
 
 
 def normalize_images_for_response(raw_images):
@@ -1768,7 +2061,33 @@ def export_thread_state_snapshot(state):
     }
 
 
-def run_chat(thread_id, chapter_name, lesson_name, lesson_text, history, user_text, saved_thread_state=None):
+def build_stateful_citations(chapter_name, lesson_name, lesson_catalog, history, user_text):
+    if not isinstance(lesson_catalog, list) or not user_text:
+        return []
+
+    try:
+        retrieval = retrieve_relevant_lesson_chunks(
+            lesson_catalog,
+            build_retrieval_query(user_text, history),
+            current_lesson_name=lesson_name,
+            top_k=1,
+        )
+    except Exception:
+        return []
+
+    return build_citations(chapter_name, lesson_name, retrieval)
+
+
+def run_stateful_chat(
+    thread_id,
+    chapter_name,
+    lesson_name,
+    lesson_text,
+    history,
+    user_text,
+    saved_thread_state=None,
+    lesson_catalog=None,
+):
     llm = get_llm()
     if llm is None:
         raise ValueError("GROQ_API_KEY is not set")
@@ -1830,8 +2149,87 @@ def run_chat(thread_id, chapter_name, lesson_name, lesson_text, history, user_te
         current_chunk=current_chunk,
     )
 
+    citations = build_stateful_citations(
+        chapter_name=chapter_name,
+        lesson_name=lesson_name,
+        lesson_catalog=lesson_catalog,
+        history=history,
+        user_text=user_text,
+    )
+    textbook_answer = response_text if citations else ""
+
     return {
         "response": response_text,
         "images": response_images,
         "thread_state": export_thread_state_snapshot(state),
+        "textbook_answer": textbook_answer,
+        "extra_explanation": "",
+        "citations": citations,
     }
+
+
+def run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_catalog, history, user_text):
+    del thread_id
+
+    llm = get_llm()
+    if llm is None:
+        raise ValueError("GROQ_API_KEY is not set")
+
+    retrieval_query = build_retrieval_query(user_text, history)
+    retrieval = retrieve_relevant_lesson_chunks(
+        lesson_catalog,
+        retrieval_query,
+        current_lesson_name=lesson_name,
+        top_k=3,
+    )
+    prompt = build_grounded_prompt(chapter_name, lesson_name, user_text, retrieval)
+    messages = [SystemMessage(content=GROUNDING_SYSTEM_PROMPT)]
+    messages.extend(build_grounded_history_messages(history))
+    messages.append(HumanMessage(content=prompt))
+
+    try:
+        response = llm.invoke(messages)
+    except Exception as exc:
+        raise ValueError(normalize_error_message(exc)) from exc
+
+    parsed = parse_grounded_response(response.content)
+    citations = build_citations(chapter_name, lesson_name, retrieval)
+    fallback_markdown = compose_chat_markdown(
+        parsed["textbook_answer"],
+        parsed["extra_explanation"],
+        citations,
+    )
+
+    return {
+        "response": fallback_markdown,
+        "images": [],
+        "thread_state": {},
+        "textbook_answer": parsed["textbook_answer"],
+        "extra_explanation": parsed["extra_explanation"],
+        "citations": citations,
+    }
+
+
+def run_chat(
+    thread_id,
+    chapter_name,
+    lesson_name,
+    lesson_source,
+    history,
+    user_text,
+    saved_thread_state=None,
+    lesson_catalog=None,
+):
+    if isinstance(lesson_source, list) and lesson_catalog is None:
+        return run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_source, history, user_text)
+
+    return run_stateful_chat(
+        thread_id=thread_id,
+        chapter_name=chapter_name,
+        lesson_name=lesson_name,
+        lesson_text=lesson_source,
+        history=history,
+        user_text=user_text,
+        saved_thread_state=saved_thread_state,
+        lesson_catalog=lesson_catalog,
+    )

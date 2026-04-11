@@ -33,6 +33,52 @@ h1, h2, h3, h4, h5, h6 {
   color: inherit;
 }
 
+.chat-rich-text {
+  color: inherit;
+  line-height: 1.8;
+}
+
+.chat-rich-text p,
+.chat-rich-text ul,
+.chat-rich-text ol,
+.chat-rich-text blockquote {
+  margin-bottom: 0.9rem;
+}
+
+.chat-rich-text p:last-child,
+.chat-rich-text ul:last-child,
+.chat-rich-text ol:last-child,
+.chat-rich-text blockquote:last-child {
+  margin-bottom: 0;
+}
+
+.chat-rich-text ul,
+.chat-rich-text ol {
+  padding-left: 1.3rem;
+}
+
+.chat-rich-text li + li {
+  margin-top: 0.35rem;
+}
+
+.chat-rich-text .katex {
+  color: inherit;
+  font-size: 1.08em;
+}
+
+.chat-rich-text .katex-display {
+  margin: 0.8rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.25rem;
+}
+
+.chat-rich-text .katex-error,
+.exam-rich-text .katex-error {
+  color: inherit !important;
+  white-space: pre-wrap;
+}
+
 .exam-rich-text p,
 .exam-rich-text ul,
 .exam-rich-text ol {
@@ -261,6 +307,26 @@ h1, h2, h3, h4, h5, h6 {
   outline: none !important;
 }
 
+.dashboard-sticky-panel {
+  position: sticky;
+  top: 5.5rem;
+}
+
+.recent-study-list {
+  max-height: 32rem;
+  overflow-y: auto;
+}
+
+.recent-study-item {
+  background: linear-gradient(180deg, #ffffff 0%, #fffaf3 100%);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.recent-study-item:hover {
+  box-shadow: 0 12px 24px -18px rgba(15, 23, 42, 0.35);
+  transform: translateY(-1px);
+}
+
 /* Hover Utilities */
 .hover-bg-gray-50:hover {
   background-color: #f9fafb !important;
@@ -312,4 +378,11 @@ h1, h2, h3, h4, h5, h6 {
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
+}
+
+@media (max-width: 1199.98px) {
+  .dashboard-sticky-panel {
+    position: static;
+    top: auto;
+  }
 }

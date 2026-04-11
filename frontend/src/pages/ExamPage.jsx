@@ -3,9 +3,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { createRateLimitNotice } from '../utils/rateLimit.js';
+import { normalizeRichText } from '../utils/richText.js';
 
 const QUESTION_COUNT_OPTIONS = [20, 30, 40, 50];
 const MIN_QUESTION_COUNT = 1;
@@ -14,10 +16,6 @@ const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 const BANGLA_REGEX = /[\u0980-\u09FF]/;
 
 const getBanglaClass = (value) => (BANGLA_REGEX.test(String(value || '')) ? 'font-bangla' : '');
-
-const normalizeMathText = (value) => String(value || '')
-  .replace(/\\\[((?:.|\n)*?)\\\]/g, (_, inner) => `$$\n${inner}\n$$`)
-  .replace(/\\\((.*?)\\\)/g, (_, inner) => `$${inner}$`);
 
 const getScoreComment = (percentage) => {
   if (percentage >= 95) return 'Excellent';
@@ -114,13 +112,13 @@ const formatAttemptTitle = (chapterNames) => {
 };
 
 const ExamRichText = ({ text, inline = false }) => {
-  const normalizedText = normalizeMathText(text);
+  const normalizedText = normalizeRichText(text);
 
   return (
     <div className={`exam-rich-text ${inline ? 'exam-rich-text-inline' : ''} ${getBanglaClass(normalizedText)}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { strict: 'ignore', throwOnError: false, errorColor: 'currentColor' }]]}
         components={{
           p: ({ children }) => <p className="mb-0">{children}</p>,
           ul: ({ children }) => <ul className="mb-0 ps-4">{children}</ul>,
@@ -134,9 +132,30 @@ const ExamRichText = ({ text, inline = false }) => {
 };
 
 const ExamPage = () => {
-  const { token } = useAuth();
+  const { token, showRateLimitNotice } = useAuth();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const preselectedChapter = searchParams.get('chapter')?.trim() || '';
+  const recommendedExam = useMemo(() => {
+    const candidate = location.state?.recommendedExam;
+    if (!candidate || typeof candidate !== 'object') {
+      return null;
+    }
+
+    const chapterName = String(candidate.chapterName || '').trim();
+    const lessonNames = Array.isArray(candidate.lessonNames)
+      ? candidate.lessonNames.map((lessonName) => String(lessonName || '').trim()).filter(Boolean)
+      : [];
+
+    if (!chapterName || !lessonNames.length) {
+      return null;
+    }
+
+    return {
+      chapterName,
+      lessonNames: Array.from(new Set(lessonNames)),
+    };
+  }, [location.state]);
   const resultSummaryRef = useRef(null);
 
   const [chapters, setChapters] = useState([]);
@@ -169,6 +188,10 @@ const ExamPage = () => {
   const [historyError, setHistoryError] = useState('');
   const [historyLoadingAttemptId, setHistoryLoadingAttemptId] = useState('');
 
+  const showExamRateLimit = useCallback((data, headers, fallbackMessage) => {
+    showRateLimitNotice(createRateLimitNotice(data, headers, fallbackMessage));
+  }, [showRateLimitNotice]);
+
   const fetchExamAttempt = useCallback(async (attemptId) => {
     const response = await fetch(`/api/exams/${encodeURIComponent(attemptId)}`, {
       headers: {
@@ -177,12 +200,16 @@ const ExamPage = () => {
     });
 
     const data = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      showExamRateLimit(data, response.headers, 'Too many requests right now. Please wait before loading that exam again.');
+      throw new Error(data.message || 'Rate limited.');
+    }
     if (!response.ok) {
       throw new Error(data.message || 'Failed to load that exam.');
     }
 
     return data.attempt || null;
-  }, [token]);
+  }, [showExamRateLimit, token]);
 
   const fetchExamHistory = useCallback(async () => {
     if (!token) {
@@ -202,6 +229,10 @@ const ExamPage = () => {
         },
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        showExamRateLimit(data, response.headers, 'Too many requests right now. Please wait before loading exam history again.');
+        return;
+      }
       if (!response.ok) {
         throw new Error(data.message || 'Failed to load previous exams.');
       }
@@ -213,7 +244,7 @@ const ExamPage = () => {
       setHistoryStatus('error');
       setHistoryError(error.message || 'Failed to load previous exams.');
     }
-  }, [token]);
+  }, [showExamRateLimit, token]);
 
   useEffect(() => {
     let mounted = true;
@@ -225,6 +256,10 @@ const ExamPage = () => {
       try {
         const response = await fetch('/api/chapters');
         const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          showExamRateLimit(data, response.headers, 'Too many requests right now. Please wait before loading chapters again.');
+          return;
+        }
         if (!response.ok) {
           throw new Error(data.message || 'Failed to load chapters.');
         }
@@ -255,7 +290,7 @@ const ExamPage = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [showExamRateLimit]);
 
   useEffect(() => {
     fetchExamHistory();
@@ -278,6 +313,10 @@ const ExamPage = () => {
     try {
       const response = await fetch(`/api/chapters/${encodeURIComponent(chapterTitle)}/lessons`);
       const data = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        showExamRateLimit(data, response.headers, 'Too many requests right now. Please wait before loading topics again.');
+        return;
+      }
       if (!response.ok) {
         throw new Error(data.message || 'Failed to load topics.');
       }
@@ -287,7 +326,9 @@ const ExamPage = () => {
       setTopicStatusByChapter((prev) => ({ ...prev, [chapterTitle]: 'ready' }));
       setSelectedTopicsByChapter((prev) => ({
         ...prev,
-        [chapterTitle]: Array.isArray(prev[chapterTitle]) ? prev[chapterTitle] : [],
+        [chapterTitle]: Array.isArray(prev[chapterTitle])
+          ? topics.filter((topicName) => prev[chapterTitle].includes(topicName))
+          : [],
       }));
     } catch (error) {
       setTopicStatusByChapter((prev) => ({ ...prev, [chapterTitle]: 'error' }));
@@ -296,7 +337,7 @@ const ExamPage = () => {
         [chapterTitle]: error.message || 'Failed to load topics.',
       }));
     }
-  }, []);
+  }, [showExamRateLimit]);
 
   useEffect(() => {
     selectedChapters.forEach((chapterTitle) => {
@@ -327,6 +368,14 @@ const ExamPage = () => {
       0,
     )
   ), [selectedChapters, selectedTopicsByChapter]);
+  const recommendedSelectedCount = useMemo(() => {
+    if (!recommendedExam) {
+      return 0;
+    }
+
+    const selectedTopics = selectedTopicsByChapter[recommendedExam.chapterName] || [];
+    return recommendedExam.lessonNames.filter((lessonName) => selectedTopics.includes(lessonName)).length;
+  }, [recommendedExam, selectedTopicsByChapter]);
 
   const parsedCustomQuestionCount = Number(customQuestionCount);
   const isCustomQuestionCountValid = Number.isInteger(parsedCustomQuestionCount)
@@ -415,6 +464,10 @@ const ExamPage = () => {
         });
 
         const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          showExamRateLimit(data, response.headers, 'Too many submissions right now. Please wait before saving this exam again.');
+          return;
+        }
         if (!response.ok) {
           throw new Error(data.message || 'Failed to save your exam result.');
         }
@@ -459,7 +512,7 @@ const ExamPage = () => {
     return () => {
       controller.abort();
     };
-  }, [activeAttempt, completionRetryKey, fetchExamAttempt, fetchExamHistory, hasFinishedActiveAttempt, token]);
+  }, [activeAttempt, completionRetryKey, fetchExamAttempt, fetchExamHistory, hasFinishedActiveAttempt, showExamRateLimit, token]);
 
   const handleChapterToggle = (chapterTitle) => {
     setBuilderError('');
@@ -515,6 +568,21 @@ const ExamPage = () => {
     }));
   };
 
+  const handleApplyRecommendedTopics = () => {
+    if (!recommendedExam) {
+      return;
+    }
+
+    setBuilderError('');
+    setSelectedChapters((prev) => (
+      prev.includes(recommendedExam.chapterName) ? prev : [recommendedExam.chapterName, ...prev]
+    ));
+    setSelectedTopicsByChapter((prev) => ({
+      ...prev,
+      [recommendedExam.chapterName]: recommendedExam.lessonNames,
+    }));
+  };
+
   const handleGenerateExam = async () => {
     if (!selections.length || !token) {
       setBuilderError('Select at least one topic before generating an exam.');
@@ -549,6 +617,10 @@ const ExamPage = () => {
       });
 
       const data = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        showExamRateLimit(data, response.headers, 'Too many exam requests right now. Please wait before generating another one.');
+        return;
+      }
       if (!response.ok) {
         throw new Error(data.message || 'Failed to generate exam.');
       }
@@ -660,7 +732,7 @@ const ExamPage = () => {
                 <div className="text-secondary mb-3">{totalSelectedTopics} topic(s) selected</div>
                 {preselectedChapter && (
                   <div className="small fw-medium text-primary">
-                    Prefilled from chapter: <span className={getBanglaClass(preselectedChapter)}>{preselectedChapter}</span>
+                    {/* Prefilled from chapter: <span className={getBanglaClass(preselectedChapter)}>{preselectedChapter}</span> */}
                   </div>
                 )}
               </div>
@@ -758,6 +830,52 @@ const ExamPage = () => {
           </div>
         </div>
       </div>
+
+      {recommendedExam && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
+          <div className="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-center">
+            <div>
+              <div className="small fw-semibold text-secondary text-uppercase mb-2">Recommended from your weak areas</div>
+              <h2 className={`fs-4 fw-bold text-primary mb-1 ${getBanglaClass(recommendedExam.chapterName)}`}>
+                {recommendedExam.chapterName}
+              </h2>
+              <div className="text-secondary">
+                Photon noticed these lessons need more practice before your next mixed exam.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleApplyRecommendedTopics}
+              className="px-4 py-2 rounded-pill border-0 custom-gradient-btn text-white fw-semibold"
+            >
+              Select recommended topics
+            </button>
+          </div>
+
+          <div className="d-flex flex-wrap gap-2 mt-3">
+            {recommendedExam.lessonNames.map((lessonName) => {
+              const isSelected = (selectedTopicsByChapter[recommendedExam.chapterName] || []).includes(lessonName);
+              return (
+                <span
+                  key={`${recommendedExam.chapterName}-${lessonName}`}
+                  className={`px-3 py-2 rounded-pill small fw-semibold border font-bangla ${
+                    isSelected
+                      ? 'bg-primary text-white border-0'
+                      : 'bg-orange-50 text-primary border-orange-100'
+                  }`}
+                >
+                  {lessonName}
+                </span>
+              );
+            })}
+          </div>
+
+          <div className="small text-secondary mt-3">
+            {recommendedSelectedCount} / {recommendedExam.lessonNames.length} recommended topic(s) selected
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
         <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
@@ -1025,7 +1143,7 @@ const ExamPage = () => {
           <div className="small fw-semibold text-secondary text-uppercase mb-2">AI Performance Summary</div>
           <div className="fw-semibold text-primary mb-2">Analyzing your performance…</div>
           <div className="text-secondary">
-            Photon is reviewing the questions you got wrong and preparing topic-wise suggestions for revision.
+            Photon is reviewing the questions you got wrong and preparing topic-wise follow-up suggestions.
           </div>
         </div>
       );
@@ -1093,11 +1211,11 @@ const ExamPage = () => {
                   <div className={`text-secondary ${getBanglaClass(topic.reason)}`}>{topic.reason}</div>
                 </div>
               ))}
-            </div>
-          ) : (
-            <div className="text-secondary">No extra revision topics were recommended for this attempt.</div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="text-secondary">No extra follow-up topics were recommended for this attempt.</div>
+        )}
+      </div>
       </div>
     );
   };

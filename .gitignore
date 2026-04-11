@@ -48,7 +48,12 @@ venv/
 dev-env.sh
 run-dev.sh
 stop-dev.sh
+dev-launch.sh
+.run-logs/
+.run-pids/
+.codex
+backend/util/.cph/
+**/incoming_requests.txt
 
 
 z_How_To_run.txt
-incoming_requests.txt

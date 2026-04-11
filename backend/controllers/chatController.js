@@ -1,8 +1,17 @@
 import mongoose from 'mongoose';
+import { recordChatConfusion } from '../util/mastery.js';
+import { refreshRevisionTasks } from '../util/revision.js';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 const FASTAPI_CHAT_URL = `${FASTAPI_BASE_URL}/chat`;
 const FASTAPI_CHAT_HISTORY_URL = `${FASTAPI_BASE_URL}/chat/history`;
+
+const logBestEffortError = (label, error) => {
+  if (error?.name === 'MongoClientClosedError') {
+    return;
+  }
+  console.error(label, error);
+};
 
 const getDb = async () => {
   if (mongoose.connection.readyState !== 1) {
@@ -18,14 +27,108 @@ const parseUserId = (value) => {
   return value;
 };
 
+const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const normalizeCitation = (value) => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const chapterName = normalizeString(value.chapterName ?? value.chapter_name);
+  const lessonName = normalizeString(value.lessonName ?? value.lesson_name);
+  const sectionLabel = normalizeString(value.sectionLabel ?? value.section_label);
+  const snippet = normalizeString(value.snippet);
+
+  if (!chapterName && !lessonName && !sectionLabel && !snippet) {
+    return null;
+  }
+
+  return {
+    chapterName,
+    lessonName,
+    sectionLabel,
+    snippet,
+  };
+};
+
+const normalizeImages = (value) => (Array.isArray(value)
+  ? value
+      .map((item) => {
+        const imageURL = normalizeString(item?.imageURL ?? item?.imageUrl ?? item?.url);
+        if (!imageURL) {
+          return null;
+        }
+
+        return {
+          imageURL,
+          description: normalizeString(item?.description ?? item?.caption),
+          topic: Array.isArray(item?.topic)
+            ? item.topic
+                .map((entry) => normalizeString(entry))
+                .filter(Boolean)
+            : [],
+        };
+      })
+      .filter(Boolean)
+  : []);
+
+export const mapUpstreamChatResponse = (value) => {
+  const citations = Array.isArray(value?.citations)
+    ? value.citations.map(normalizeCitation).filter(Boolean)
+    : [];
+  const images = normalizeImages(value?.images);
+
+  return {
+    response: normalizeString(value?.response),
+    textbookAnswer: normalizeString(value?.textbook_answer ?? value?.textbookAnswer),
+    extraExplanation: normalizeString(value?.extra_explanation ?? value?.extraExplanation),
+    citations,
+    images,
+  };
+};
+
+export const mapStoredHistoryEntry = (value) => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const role = value.role === 'assistant' ? 'assistant' : 'user';
+  const content = normalizeString(value.content);
+
+  if (role !== 'assistant') {
+    return {
+      role,
+      content,
+    };
+  }
+
+  const mapped = {
+    role,
+    content,
+    textbookAnswer: normalizeString(value.textbookAnswer ?? value.textbook_answer),
+    extraExplanation: normalizeString(value.extraExplanation ?? value.extra_explanation),
+    citations: Array.isArray(value.citations)
+      ? value.citations.map(normalizeCitation).filter(Boolean)
+      : [],
+  };
+
+  const images = normalizeImages(value.images);
+  if (images.length > 0) {
+    mapped.images = images;
+  }
+
+  return mapped;
+};
+
 export const chat = async (req, res) => {
   const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
-  const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+  const userId = typeof req.userId === 'string' ? req.userId.trim() : '';
   const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
   const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
+  const historyMode = req.body?.historyMode === 'assistant_only' ? 'assistant_only' : 'default';
 
   if (!message || !userId || !chapterName || !lessonName) {
-    res.status(400).json({ message: 'message, userId, chapterName, lessonName are required' });
+    res.status(400).json({ message: 'message, chapterName, and lessonName are required' });
     return;
   }
 
@@ -36,7 +139,13 @@ export const chat = async (req, res) => {
     const upstream = await fetch(FASTAPI_CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, user_id: userId, chapter_name: chapterName, lesson_name: lessonName }),
+      body: JSON.stringify({
+        message,
+        user_id: userId,
+        chapter_name: chapterName,
+        lesson_name: lessonName,
+        history_mode: historyMode,
+      }),
       signal: controller.signal,
     });
 
@@ -46,28 +155,21 @@ export const chat = async (req, res) => {
       return;
     }
 
-    const responseText = typeof data?.response === 'string' ? data.response : '';
-    const images = Array.isArray(data?.images)
-      ? data.images
-          .map((item) => {
-            const imageURL = typeof item?.imageURL === 'string' ? item.imageURL.trim() : '';
-            const description = typeof item?.description === 'string' ? item.description.trim() : '';
-            const topic = Array.isArray(item?.topic)
-              ? item.topic
-                  .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
-                  .filter(Boolean)
-              : [];
+    recordChatConfusion({
+      userId,
+      chapterName,
+      lessonName,
+      message,
+    }).then((changed) => {
+      if (changed) {
+        return refreshRevisionTasks({ userId });
+      }
+      return null;
+    }).catch((error) => {
+      logBestEffortError('Mastery chat signal error:', error);
+    });
 
-            return {
-              imageURL,
-              description,
-              topic,
-            };
-          })
-          .filter((item) => item.imageURL)
-      : [];
-
-    res.json({ response: responseText, images });
+    res.json(mapUpstreamChatResponse(data));
   } catch {
     res.status(502).json({ message: 'FastAPI is unreachable' });
   } finally {
@@ -76,12 +178,12 @@ export const chat = async (req, res) => {
 };
 
 export const history = async (req, res) => {
-  const userId = typeof req.query?.userId === 'string' ? req.query.userId.trim() : '';
+  const userId = typeof req.userId === 'string' ? req.userId.trim() : '';
   const chapterName = typeof req.query?.chapterName === 'string' ? req.query.chapterName.trim() : '';
   const lessonName = typeof req.query?.lessonName === 'string' ? req.query.lessonName.trim() : '';
 
   if (!userId || !chapterName || !lessonName) {
-    res.status(400).json({ message: 'userId, chapterName, lessonName are required' });
+    res.status(400).json({ message: 'chapterName and lessonName are required' });
     return;
   }
 
@@ -93,19 +195,20 @@ export const history = async (req, res) => {
       chapter_name: chapterName,
       lesson_name: lessonName,
     });
-    res.json({ history: Array.isArray(doc?.history) ? doc.history : [] });
+    const historyEntries = Array.isArray(doc?.history) ? doc.history.map(mapStoredHistoryEntry).filter(Boolean) : [];
+    res.json({ history: historyEntries });
   } catch {
     res.status(500).json({ message: 'Failed to load history' });
   }
 };
 
 export const clearHistory = async (req, res) => {
-  const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+  const userId = typeof req.userId === 'string' ? req.userId.trim() : '';
   const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
   const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
 
   if (!userId || !chapterName || !lessonName) {
-    res.status(400).json({ message: 'userId, chapterName, lessonName are required' });
+    res.status(400).json({ message: 'chapterName and lessonName are required' });
     return;
   }
 

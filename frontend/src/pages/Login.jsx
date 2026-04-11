@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { createRateLimitNotice } from '../utils/rateLimit.js';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, showRateLimitNotice } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,6 +23,14 @@ const Login = () => {
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        showRateLimitNotice(createRateLimitNotice(
+          data,
+          res.headers,
+          'Too many sign-in attempts. Please wait before trying again.',
+        ));
+        return;
+      }
       if (!res.ok) {
         throw new Error(data?.message || 'Login failed.');
       }
@@ -117,4 +126,3 @@ const Login = () => {
 };
 
 export default Login;
-

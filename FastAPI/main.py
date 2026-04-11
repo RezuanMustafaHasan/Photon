@@ -57,6 +57,14 @@ class ChatRequest(BaseModel):
     user_id: str
     chapter_name: str
     lesson_name: str
+    history_mode: str = "default"
+
+
+class ChatCitation(BaseModel):
+    chapter_name: str
+    lesson_name: str
+    section_label: str
+    snippet: str
 
 
 class ChatThreadRequest(BaseModel):
@@ -74,6 +82,9 @@ class ChatImage(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     images: list[ChatImage] = Field(default_factory=list)
+    textbook_answer: str = ""
+    extra_explanation: str = ""
+    citations: list[ChatCitation] = Field(default_factory=list)
 
 
 class HistoryResponse(BaseModel):
@@ -169,16 +180,19 @@ async def chat(payload: ChatRequest):
     lesson_text = str(lesson.get("content") or "").strip()
     if not lesson_text:
         raise HTTPException(status_code=404, detail="Lesson content not found")
+    lesson_label = get_lesson_label(lesson, payload.lesson_name)
+    lesson_catalog = load_chapter_lesson_catalog(payload.chapter_name, lesson_label)
     thread_id = f"{payload.user_id}:{payload.chapter_name}:{payload.lesson_name}"
     try:
         response_payload = run_chat(
             thread_id=thread_id,
             chapter_name=payload.chapter_name,
-            lesson_name=payload.lesson_name,
-            lesson_text=lesson_text,
+            lesson_name=lesson_label,
+            lesson_source=lesson_text,
             history=history,
             user_text=payload.message,
             saved_thread_state=saved_thread_state,
+            lesson_catalog=lesson_catalog,
         )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -186,14 +200,21 @@ async def chat(payload: ChatRequest):
     response_text = str(response_payload.get("response") or "")
     response_images = response_payload.get("images") or []
     thread_state = response_payload.get("thread_state") or {}
+    textbook_answer = str(response_payload.get("textbook_answer") or "")
+    extra_explanation = str(response_payload.get("extra_explanation") or "")
+    citations = response_payload.get("citations") or []
     if not isinstance(response_images, list):
         response_images = []
 
-    history.append({"role": "user", "content": payload.message})
+    if payload.history_mode != "assistant_only":
+        history.append({"role": "user", "content": payload.message})
 
     assistant_entry = {
         "role": "assistant",
         "content": response_text,
+        "textbook_answer": textbook_answer,
+        "extra_explanation": extra_explanation,
+        "citations": citations if isinstance(citations, list) else [],
     }
     if response_images:
         assistant_entry["images"] = response_images
@@ -206,7 +227,13 @@ async def chat(payload: ChatRequest):
         history,
         thread_state,
     )
-    return ChatResponse(response=response_text, images=response_images)
+    return ChatResponse(
+        response=response_text,
+        images=response_images,
+        textbook_answer=textbook_answer,
+        extra_explanation=extra_explanation,
+        citations=citations if isinstance(citations, list) else [],
+    )
 
 
 @app.get("/history", response_model=HistoryResponse)
@@ -346,6 +373,14 @@ def load_lesson_images(chapter_name, lesson_name):
 configure_image_loader(load_lesson_images)
 
 
+def load_chapter_source(chapter_name):
+    items = get_main_items()
+    match = find_chapter_item(items, chapter_name)
+    if not match:
+        return None
+    return get_chapter_source(match)
+
+
 def sanitize_exam_selections(raw_selections):
     merged = {}
 
@@ -380,6 +415,51 @@ def get_lesson_label(lesson, fallback):
         or lesson.get("lesson_title")
         or fallback
     )
+
+
+def build_chat_lesson_entry(chapter_name, lesson, fallback):
+    content = str(lesson.get("content") or "").strip()
+    if not content:
+        return None
+
+    return {
+        "chapter_name": chapter_name,
+        "lesson_name": get_lesson_label(lesson, fallback),
+        "content": content,
+    }
+
+
+def load_chapter_lesson_catalog(chapter_name, current_lesson_name):
+    source = load_chapter_source(chapter_name)
+    if not source:
+        return []
+
+    entries = []
+    current_match = None
+    lessons = source.get("lessons") if isinstance(source, dict) else None
+    if not isinstance(lessons, list):
+        return entries
+
+    target_key = normalize_title(current_lesson_name)
+    for lesson in lessons:
+        lesson_label = get_lesson_label(lesson, current_lesson_name)
+        entry = build_chat_lesson_entry(chapter_name, lesson, lesson_label)
+        if not entry:
+            continue
+        entries.append(entry)
+        if normalize_title(lesson_label) == target_key:
+            current_match = entry
+
+    if current_match:
+        ordered = [current_match]
+        ordered.extend(
+            entry
+            for entry in entries
+            if normalize_title(entry["lesson_name"]) != normalize_title(current_match["lesson_name"])
+        )
+        return ordered
+
+    return entries
 
 
 def load_selected_lessons(selections):

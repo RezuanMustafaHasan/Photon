@@ -211,7 +211,7 @@ const LandingPage = () => {
                 <ul className="text-secondary mb-4 ps-3">
                   <li className="mb-2">Everything in Free</li>
                   <li className="mb-2">Deeper explanations</li>
-                  <li className="mb-2">Faster revision flow</li>
+                  <li className="mb-2">Faster guided study flow</li>
                 </ul>
                 <button type="button" onClick={() => navigate('/signup')} className="btn auth-primary-btn w-100 rounded-pill py-2 fw-bold">
                   Start Pro Trial
@@ -248,7 +248,7 @@ const LandingPage = () => {
                 <div className="mt-4 d-flex gap-2 flex-wrap">
                   <span className="badge bg-orange-50 border border-orange-100 text-primary rounded-pill px-3 py-2">AI Tutor</span>
                   <span className="badge bg-orange-50 border border-orange-100 text-primary rounded-pill px-3 py-2">Progress</span>
-                  <span className="badge bg-orange-50 border border-orange-100 text-primary rounded-pill px-3 py-2">Revision</span>
+                  <span className="badge bg-orange-50 border border-orange-100 text-primary rounded-pill px-3 py-2">Study Flow</span>
                 </div>
               </div>
             </div>

@@ -7,6 +7,7 @@ import ExamPage from './pages/ExamPage';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import RateLimitScreen from './components/RateLimitScreen';
 
 function ChapterChatRoute() {
   const navigate = useNavigate();
@@ -25,17 +26,7 @@ function ChapterChatRoute() {
 }
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, isHydrating } = useAuth();
-  if (isHydrating) {
-    return (
-      <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: '#FFF7ED' }}>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
-          <div className="fw-bold text-primary mb-1">Loading…</div>
-          <div className="text-secondary small">Checking your session</div>
-        </div>
-      </div>
-    );
-  }
+  const { isAuthenticated } = useAuth();
   if (!isAuthenticated) {
     return <Navigate to="/landing" replace />;
   }
@@ -43,22 +34,17 @@ function ProtectedRoute({ children }) {
 }
 
 function HomeRedirect() {
-  const { isAuthenticated, isHydrating } = useAuth();
-  if (isHydrating) {
-    return (
-      <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: '#FFF7ED' }}>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
-          <div className="fw-bold text-primary mb-1">Loading…</div>
-          <div className="text-secondary small">Checking your session</div>
-        </div>
-      </div>
-    );
-  }
+  const { isAuthenticated } = useAuth();
   return <Navigate to={isAuthenticated ? '/dashboard' : '/landing'} replace />;
 }
 
 function App() {
   const navigate = useNavigate();
+  const { rateLimitNotice } = useAuth();
+
+  if (rateLimitNotice) {
+    return <RateLimitScreen notice={rateLimitNotice} />;
+  }
 
   const handleLogin = () => {
     navigate('/dashboard');

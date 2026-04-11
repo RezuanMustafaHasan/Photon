@@ -2,11 +2,22 @@ import { Router } from 'express';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { completeExam, generateExam, getExamAttempt, getExamHistory } from '../controllers/examController.js';
 
-const router = Router();
+const passthrough = (_req, _res, next) => {
+  next();
+};
 
-router.post('/generate', authMiddleware, generateExam);
-router.post('/complete', authMiddleware, completeExam);
-router.get('/history', authMiddleware, getExamHistory);
-router.get('/:attemptId', authMiddleware, getExamAttempt);
+export const createExamRouter = ({
+  examGenerateLimiter = passthrough,
+  examCompleteLimiter = passthrough,
+} = {}) => {
+  const router = Router();
 
-export default router;
+  router.post('/generate', authMiddleware, examGenerateLimiter, generateExam);
+  router.post('/complete', authMiddleware, examCompleteLimiter, completeExam);
+  router.get('/history', authMiddleware, getExamHistory);
+  router.get('/:attemptId', authMiddleware, getExamAttempt);
+
+  return router;
+};
+
+export default createExamRouter;
