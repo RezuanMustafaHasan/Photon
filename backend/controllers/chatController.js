@@ -46,7 +46,27 @@ export const chat = async (req, res) => {
     }
 
     const responseText = typeof data?.response === 'string' ? data.response : '';
-    res.json({ response: responseText });
+    const images = Array.isArray(data?.images)
+      ? data.images
+          .map((item) => {
+            const imageURL = typeof item?.imageURL === 'string' ? item.imageURL.trim() : '';
+            const description = typeof item?.description === 'string' ? item.description.trim() : '';
+            const topic = Array.isArray(item?.topic)
+              ? item.topic
+                  .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+                  .filter(Boolean)
+              : [];
+
+            return {
+              imageURL,
+              description,
+              topic,
+            };
+          })
+          .filter((item) => item.imageURL)
+      : [];
+
+    res.json({ response: responseText, images });
   } catch {
     res.status(502).json({ message: 'FastAPI is unreachable' });
   } finally {

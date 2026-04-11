@@ -4,9 +4,13 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 
-const ChatMessage = ({ sender, text, label }) => {
+const ChatMessage = ({ sender, text, label, images }) => {
   const isAI = sender === 'ai';
   const isString = typeof text === 'string';
+  const safeImages = Array.isArray(images)
+    ? images.filter((item) => typeof item?.imageURL === 'string' && item.imageURL.trim().length > 0)
+    : [];
+
   const normalized = isString
     ? text
         .replace(/\\\[((?:.|\n)*?)\\\]/g, (_, inner) => `$$\n${inner}\n$$`)
@@ -41,6 +45,41 @@ const ChatMessage = ({ sender, text, label }) => {
           normalized
         )}
       </div>
+
+      {isAI && safeImages.length > 0 && (
+        <div className="mt-3 w-100 vstack gap-3" style={{ maxWidth: '80%' }}>
+          {safeImages.map((image, index) => {
+            const topics = Array.isArray(image.topic) ? image.topic.filter(Boolean) : [];
+            return (
+              <figure key={`${image.imageURL}-${index}`} className="bg-white border border-orange-100 rounded-2xl p-2 mb-0 shadow-sm">
+                <a href={image.imageURL} target="_blank" rel="noreferrer" className="d-block text-decoration-none">
+                  <img
+                    src={image.imageURL}
+                    alt={image.description || 'Lesson visual'}
+                    loading="lazy"
+                    className="w-100 rounded-xl"
+                    style={{ maxHeight: '18rem', objectFit: 'cover' }}
+                  />
+                </a>
+
+                {image.description && (
+                  <figcaption className="small text-secondary mt-2">{image.description}</figcaption>
+                )}
+
+                {topics.length > 0 && (
+                  <div className="d-flex flex-wrap gap-2 mt-2">
+                    {topics.map((topic, topicIndex) => (
+                      <span key={`${topic}-${topicIndex}`} className="badge bg-orange-50 text-secondary border border-orange-100">
+                        {topic}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </figure>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

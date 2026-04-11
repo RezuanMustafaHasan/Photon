@@ -27,7 +27,7 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
     setMessages((prev) => [
       ...prev,
       { id: userMsgId, sender: 'user', text },
-      { id: aiId, sender: 'ai', text: '…' },
+      { id: aiId, sender: 'ai', text: '…', images: [] },
     ]);
 
     setIsSending(true);
@@ -54,12 +54,30 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
         throw new Error(data?.message || 'Chat failed');
       }
 
+      const responseImages = Array.isArray(data?.images)
+        ? data.images
+            .map((item) => {
+              const imageURL = typeof item?.imageURL === 'string' ? item.imageURL.trim() : '';
+              const description = typeof item?.description === 'string' ? item.description : '';
+              const topic = Array.isArray(item?.topic)
+                ? item.topic.filter((entry) => typeof entry === 'string' && entry.trim().length > 0)
+                : [];
+
+              return {
+                imageURL,
+                description,
+                topic,
+              };
+            })
+            .filter((item) => item.imageURL)
+        : [];
+
       setMessages((prev) =>
-        prev.map((m) => (m.id === aiId ? { ...m, text: data.response || '' } : m)),
+        prev.map((m) => (m.id === aiId ? { ...m, text: data.response || '', images: responseImages } : m)),
       );
     } catch (err) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === aiId ? { ...m, text: err?.message || 'Chat failed' } : m)),
+        prev.map((m) => (m.id === aiId ? { ...m, text: err?.message || 'Chat failed', images: [] } : m)),
       );
     } finally {
       setIsSending(false);
@@ -72,7 +90,7 @@ const ChatWindow = ({ messages, setMessages, chapterName, lessonName }) => {
       <div className="flex-grow-1 overflow-y-auto px-4 px-md-5 px-lg-5 py-4 vstack gap-4 custom-scrollbar">
         <div className="container-sm mw-100 vstack gap-4 pb-4" style={{ maxWidth: '48rem' }}>
           {safeMessages.map((m) => (
-            <ChatMessage key={m.id} sender={m.sender} text={m.text} />
+            <ChatMessage key={m.id} sender={m.sender} text={m.text} images={m.images} />
           ))}
           <div ref={scrollRef} />
         </div>
