@@ -2,7 +2,7 @@ import json
 import os
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pymongo import MongoClient
 from bson import ObjectId
 
@@ -33,7 +33,7 @@ def load_env_file(env_path):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_env_file(os.path.join(BASE_DIR, ".env"))
 
-from graph.simple_graph import run_chat
+from graph.simple_graph import run_chat, configure_image_loader
 from graph.exam_analysis import analyze_exam_attempt
 from graph.exam_generator import generate_exam
 
@@ -59,8 +59,15 @@ class ChatRequest(BaseModel):
     lesson_name: str
 
 
+class ChatImage(BaseModel):
+    imageURL: str
+    description: str = ""
+    topic: list[str] = Field(default_factory=list)
+
+
 class ChatResponse(BaseModel):
     response: str
+    images: list[ChatImage] = Field(default_factory=list)
 
 
 class HistoryResponse(BaseModel):
@@ -150,14 +157,34 @@ async def chat(payload: ChatRequest):
     lesson_text = json.dumps(lesson, ensure_ascii=False)
     thread_id = f"{payload.user_id}:{payload.chapter_name}:{payload.lesson_name}"
     try:
-        response_text = run_chat(thread_id, lesson_text, history, payload.message)
+        response_payload = run_chat(
+            thread_id=thread_id,
+            chapter_name=payload.chapter_name,
+            lesson_name=payload.lesson_name,
+            lesson_text=lesson_text,
+            history=history,
+            user_text=payload.message,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    response_text = str(response_payload.get("response") or "")
+    response_images = response_payload.get("images") or []
+    if not isinstance(response_images, list):
+        response_images = []
+
     history.append({"role": "user", "content": payload.message})
-    history.append({"role": "assistant", "content": response_text})
+
+    assistant_entry = {
+        "role": "assistant",
+        "content": response_text,
+    }
+    if response_images:
+        assistant_entry["images"] = response_images
+
+    history.append(assistant_entry)
     save_chat_history(payload.user_id, payload.chapter_name, payload.lesson_name, history)
-    return ChatResponse(response=response_text)
+    return ChatResponse(response=response_text, images=response_images)
 
 
 @app.get("/history", response_model=HistoryResponse)
@@ -272,6 +299,18 @@ def load_lesson(chapter_name, lesson_name):
         return None
     source = get_chapter_source(match)
     return find_lesson(source, lesson_name)
+
+
+def load_lesson_images(chapter_name, lesson_name):
+    lesson = load_lesson(chapter_name, lesson_name)
+    if not isinstance(lesson, dict):
+        return []
+
+    images = lesson.get("images") or []
+    return images if isinstance(images, list) else []
+
+
+configure_image_loader(load_lesson_images)
 
 
 def sanitize_exam_selections(raw_selections):

@@ -9,6 +9,7 @@ const createInitialMessages = () => ([
     id: crypto.randomUUID(),
     sender: 'ai',
     text: 'Ask your question here.',
+    images: [],
   },
 ]);
 
@@ -51,10 +52,34 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
           return;
         }
         const history = Array.isArray(data.history) ? data.history : [];
+
+        const normalizeImages = (value) => {
+          if (!Array.isArray(value)) {
+            return [];
+          }
+
+          return value
+            .map((item) => {
+              const imageURL = typeof item?.imageURL === 'string' ? item.imageURL.trim() : '';
+              const description = typeof item?.description === 'string' ? item.description : '';
+              const topic = Array.isArray(item?.topic)
+                ? item.topic.filter((entry) => typeof entry === 'string' && entry.trim().length > 0)
+                : [];
+
+              return {
+                imageURL,
+                description,
+                topic,
+              };
+            })
+            .filter((item) => item.imageURL);
+        };
+
         const mapped = history.map((item) => ({
           id: crypto.randomUUID(),
           sender: item.role === 'assistant' ? 'ai' : 'user',
           text: item.content || '',
+          images: item.role === 'assistant' ? normalizeImages(item.images) : [],
         })).filter((item) => item.text);
         setMessagesByLesson((prev) => ({
           ...prev,
