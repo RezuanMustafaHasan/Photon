@@ -14,3 +14,19 @@ Incoming request: {"message":"start. \nExplain using images for better understan
 Incoming request: {"message":"B er dike","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
 Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
 Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"start explaining","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"what is bivob?","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"next","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"সমবিভব তল","history_mode":"default"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"আধান","history_mode":"default"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"next","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"next","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"bivob dara","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"ok","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"next","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"next","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্রের সীমাবদ্ধতা","history_mode":"default"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ ক্ষেত্র","history_mode":"default"}
