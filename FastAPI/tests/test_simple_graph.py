@@ -37,20 +37,19 @@ except ModuleNotFoundError:
 from graph.simple_graph import (
     AIMessage,
     HumanMessage,
-    advance_turn,
-    build_image_candidates_for_reply,
+    advance_topic,
     build_checkpoint_indexes,
-    build_lesson_image_plan,
-    build_topic_plan,
+    collect_turn_response_text,
     compose_chat_markdown,
-    ensure_topic_transition,
-    is_checkpoint_chunk,
     is_done_response,
+    normalize_lesson_topics,
     parse_grounded_response,
     resolve_chat_model_config,
     resolve_images_for_response,
+    route_after_teach,
     run_chat,
     should_advance_to_next_chunk,
+    teach,
 )
 
 
@@ -63,6 +62,130 @@ class FakeLLM:
         self.messages = messages
         return type("FakeResponse", (), {"content": self.content})()
 
+
+class StatefulTutorLLM:
+    def bind_tools(self, _tools):
+        return self
+
+    def invoke(self, messages):
+        system = getattr(messages[0], "content", "") if messages else ""
+        user_prompt = getattr(messages[1], "content", "") if len(messages) > 1 else ""
+
+        if "Plan the next micro-step" in system:
+            if '"title": "A"' in user_prompt:
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": '{"next_focus":"A এর প্রথম ধারণা","remaining_after_this_reply":"A topic এর বাকি অংশ","topic_complete_after_reply":false,"ask_checkpoint_now":false}'},
+                )()
+            if '"title": "B"' in user_prompt:
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": '{"next_focus":"B এর শুরু","remaining_after_this_reply":"B topic এর বাকি অংশ","topic_complete_after_reply":false,"ask_checkpoint_now":false}'},
+                )()
+            return type(
+                "FakeResponse",
+                (),
+                {"content": '{"next_focus":"পরের ছোট ধারণা","remaining_after_this_reply":"আরও আছে","topic_complete_after_reply":false,"ask_checkpoint_now":false}'},
+            )()
+
+        if "Update the running tutoring summary" in system:
+            if '"title": "A"' in user_prompt:
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": '{"taught_concepts":["A এর প্রথম ধারণা"],"understood":[],"confusion":[],"next_to_teach":"A এর বাকি অংশ"}'},
+                )()
+            if '"title": "B"' in user_prompt:
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": '{"taught_concepts":["B এর শুরু"],"understood":[],"confusion":[],"next_to_teach":"B এর পরের অংশ"}'},
+                )()
+            return type(
+                "FakeResponse",
+                (),
+                {"content": '{"taught_concepts":["একটি ছোট ধারণা"],"understood":[],"confusion":[],"next_to_teach":"পরের অংশ"}'},
+            )()
+
+        if "Topic 1 of 2: A" in system:
+            return AIMessage("A topic এর শুধু প্রথম ছোট ধারণাটা বোঝাই।")
+        if "Topic 2 of 2: B" in system:
+            return AIMessage("B topic এর প্রথম ছোট ধারণাটা বোঝাই।")
+        if "Topic 1 of 3: A" in system:
+            return AIMessage("A topic শেষ করলাম।")
+        if "Topic 2 of 3: B" in system:
+            return AIMessage("এখন B topic এর প্রথম ছোট অংশ বোঝাই।")
+        return AIMessage("একটা ছোট অংশ বোঝাই।")
+
+
+class TopicAdvanceTutorLLM:
+    def bind_tools(self, _tools):
+        return self
+
+    def invoke(self, messages):
+        system = getattr(messages[0], "content", "") if messages else ""
+        user_prompt = getattr(messages[1], "content", "") if len(messages) > 1 else ""
+
+        if "Plan the next micro-step" in system:
+            if '"title": "A"' in user_prompt:
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": '{"next_focus":"A topic এর শেষ ছোট অংশ","remaining_after_this_reply":"nothing","topic_complete_after_reply":true,"ask_checkpoint_now":false}'},
+                )()
+            if '"title": "B"' in user_prompt:
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": '{"next_focus":"B topic এর প্রথম ছোট অংশ","remaining_after_this_reply":"B topic এর বাকি অংশ","topic_complete_after_reply":false,"ask_checkpoint_now":false}'},
+                )()
+            return type(
+                "FakeResponse",
+                (),
+                {"content": '{"next_focus":"একটি ছোট অংশ","remaining_after_this_reply":"আরও আছে","topic_complete_after_reply":false,"ask_checkpoint_now":false}'},
+            )()
+
+        if "Update the running tutoring summary" in system:
+            if '"title": "A"' in user_prompt:
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": '{"taught_concepts":["A topic"],"understood":[],"confusion":[],"next_to_teach":"B"}'},
+                )()
+            if '"title": "B"' in user_prompt:
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": '{"taught_concepts":["B topic"],"understood":[],"confusion":[],"next_to_teach":"B topic এর বাকি অংশ"}'},
+                )()
+            return type(
+                "FakeResponse",
+                (),
+                {"content": '{"taught_concepts":["একটি ধারণা"],"understood":[],"confusion":[],"next_to_teach":"পরের অংশ"}'},
+            )()
+
+        if "Topic 1 of 3: A" in system:
+            return AIMessage("A topic শেষ করলাম।")
+        if "Topic 2 of 3: B" in system:
+            return AIMessage("এখন B topic এর প্রথম ছোট অংশ বোঝাই।")
+        return AIMessage("একটা ছোট অংশ বোঝাই।")
+
+
+STATEFUL_LESSON = {
+    "lesson_name": "Coulomb's Law",
+    "topics": [
+        {
+            "title": "মূল ধারণা",
+            "content": "দুটি চার্জের মধ্যে বল দূরত্বের বর্গের ব্যস্তানুপাতিক।",
+        },
+        {
+            "title": "সূত্র",
+            "content": "কুলম্বের সূত্রের গাণিতিক রূপ $F = kq_1q_2 / r^2$।",
+        },
+    ],
+}
 
 SAMPLE_LESSON = {
     "chapter_name": "Static Electricity",
@@ -92,213 +215,164 @@ Page 2
 
 
 class SimpleGraphTests(unittest.TestCase):
-    def test_build_topic_plan_keeps_one_topic_per_chunk(self):
-        chunks = [
-            "প্রথম topic এ electric potential এর প্রাথমিক ধারণা আছে।",
-            "দ্বিতীয় topic এ potential difference ব্যাখ্যা করা হয়েছে।",
-            "তৃতীয় topic এ কাজের সাথে সম্পর্ক দেখানো হয়েছে।",
-        ]
+    def test_normalize_lesson_topics_keeps_each_topic_atomic(self):
+        topics = normalize_lesson_topics(STATEFUL_LESSON)
 
-        topic_plan = build_topic_plan(chunks)
+        self.assertEqual(len(topics), 2)
+        self.assertEqual(topics[0]["title"], "মূল ধারণা")
+        self.assertIn("কুলম্বের সূত্র", topics[1]["content"])
 
-        self.assertEqual(len(topic_plan), 3)
-        self.assertIn("প্রথম topic", topic_plan[0])
-        self.assertIn("দ্বিতীয় topic", topic_plan[1])
+    def test_normalize_lesson_topics_falls_back_to_single_topic_without_chunking(self):
+        topics = normalize_lesson_topics(
+            {
+                "lesson_name": "Electric Potential",
+                "content": "পুরো lesson content এখানে একসাথে আছে।",
+            }
+        )
+
+        self.assertEqual(len(topics), 1)
+        self.assertEqual(topics[0]["title"], "Electric Potential")
+        self.assertEqual(topics[0]["content"], "পুরো lesson content এখানে একসাথে আছে।")
 
     def test_done_response_uses_uppercase_done_token(self):
         self.assertTrue(is_done_response(AIMessage("DONE")))
         self.assertTrue(is_done_response(AIMessage("Done")))
         self.assertFalse(is_done_response(AIMessage("DONE now")))
 
-    def test_checkpoint_schedule_is_not_every_chunk_for_medium_lesson(self):
-        lesson_chunks = ["topic 1", "topic 2", "topic 3", "topic 4"]
-
-        self.assertFalse(is_checkpoint_chunk(0, lesson_chunks))
-        self.assertTrue(is_checkpoint_chunk(1, lesson_chunks))
-        self.assertFalse(is_checkpoint_chunk(2, lesson_chunks))
-        self.assertTrue(is_checkpoint_chunk(3, lesson_chunks))
-        self.assertEqual(build_checkpoint_indexes(len(lesson_chunks)), [1, 3])
+    def test_checkpoint_schedule_is_not_every_topic_for_medium_lesson(self):
+        self.assertEqual(build_checkpoint_indexes(4), [1, 3])
 
     def test_should_advance_forces_move_after_max_turns_on_topic(self):
         state = {
             "lesson_complete": False,
-            "awaiting_student_reply": True,
+            "awaiting_reply": True,
             "messages": [HumanMessage("আমি পুরোপুরি বুঝিনি")],
-            "current_topic_turns": 2,
+            "current_topic_turns": 4,
             "current_topic_index": 1,
             "checkpoint_indexes": [1, 3],
-            "topic_plan": ["t1", "t2", "t3", "t4"],
-            "lesson_chunks": ["c1", "c2", "c3", "c4"],
+            "topics": STATEFUL_LESSON["topics"],
         }
 
         self.assertTrue(should_advance_to_next_chunk(state))
 
-    def test_advance_turn_moves_topic_index_forward(self):
+    def test_advance_topic_moves_topic_index_forward(self):
         state = {
             "lesson_complete": False,
-            "awaiting_student_reply": True,
-            "messages": [HumanMessage("next")],
-            "current_topic_turns": 1,
-            "current_chunk_turns": 1,
             "current_topic_index": 0,
-            "current_chunk_index": 0,
-            "checkpoint_indexes": [1],
-            "topic_plan": ["topic 1", "topic 2"],
-            "lesson_chunks": ["chunk 1", "chunk 2"],
-            "lesson_summary": {"next_to_teach": "topic 1"},
+            "current_topic_turns": 1,
+            "current_topic": STATEFUL_LESSON["topics"][0],
+            "topics": STATEFUL_LESSON["topics"],
+            "lesson_summary": {"next_to_teach": "মূল ধারণা"},
         }
 
-        updated = advance_turn(state)
+        updated = advance_topic(state)
 
         self.assertEqual(updated["current_topic_index"], 1)
         self.assertEqual(updated["current_topic_turns"], 0)
-        self.assertEqual(updated["current_chunk_index"], 1)
+        self.assertEqual(updated["current_topic"]["title"], "সূত্র")
 
-    def test_ensure_topic_transition_prepends_intro_and_bridge(self):
-        intro_state = {
-            "lesson_name": "তড়িৎ বিভব",
-            "topic_plan": ["মূল ধারণা", "বিভব পার্থক্য"],
+    def test_collect_turn_response_text_joins_teaching_and_drops_done(self):
+        text = collect_turn_response_text(
+            [
+                AIMessage("প্রথম topic বোঝাই।"),
+                AIMessage("দ্বিতীয় topic-ও বুঝে নেই।"),
+                AIMessage("DONE"),
+            ]
+        )
+
+        self.assertIn("প্রথম topic", text)
+        self.assertIn("দ্বিতীয় topic", text)
+        self.assertNotEqual(text, "DONE")
+
+    @patch("graph.simple_graph.get_llm")
+    def test_teach_stops_after_one_small_reply(self, mock_get_llm):
+        mock_get_llm.return_value = StatefulTutorLLM()
+
+        state = {
+            "chapter_name": "Static Electricity",
+            "lesson_name": "Small Lesson",
+            "chat_model": "groq:test-model",
+            "topics": [
+                {"title": "A", "content": "A topic content with multiple concepts."},
+                {"title": "B", "content": "B topic content with multiple concepts."},
+            ],
             "current_topic_index": 0,
             "current_topic_turns": 0,
+            "current_topic": {"title": "A", "content": "A topic content with multiple concepts."},
+            "topic_complete": False,
+            "pending_action": "",
+            "checkpoint_indexes": [1],
+            "used_image_ids": [],
+            "lesson_summary": {},
+            "awaiting_reply": False,
+            "lesson_complete": False,
+            "messages": [HumanMessage("শুরু করো")],
         }
-        bridge_state = {
-            "lesson_name": "তড়িৎ বিভব",
-            "topic_plan": ["মূল ধারণা", "বিভব পার্থক্য"],
-            "current_topic_index": 1,
-            "current_topic_turns": 0,
+
+        result = teach(state)
+        merged_state = {
+            **state,
+            **result,
+            "messages": [*state["messages"], *(result.get("messages") or [])],
         }
 
-        intro_text = ensure_topic_transition("এখানে বিভবের মূল ধারণা বোঝানো হচ্ছে।", intro_state)
-        bridge_text = ensure_topic_transition("এখন বিভব পার্থক্য বোঝাই।", bridge_state)
+        self.assertEqual(result["messages"][0].content, "A topic এর শুধু প্রথম ছোট ধারণাটা বোঝাই।")
+        self.assertTrue(result["awaiting_reply"])
+        self.assertFalse(result["topic_complete"])
+        self.assertEqual(route_after_teach(merged_state), "end")
 
-        self.assertIn("lesson", intro_text.lower())
-        self.assertNotEqual(bridge_text, "এখন বিভব পার্থক্য বোঝাই।")
+    def test_teach_marks_advance_pending_after_topic_completion(self):
+        state = {
+            "chapter_name": "Static Electricity",
+            "lesson_name": "Progressive Lesson",
+            "chat_model": "groq:test-model",
+            "topics": [
+                {"title": "A", "content": "A topic content."},
+                {"title": "B", "content": "B topic content."},
+                {"title": "C", "content": "C topic content."},
+            ],
+            "current_topic_index": 0,
+            "current_topic_turns": 1,
+            "current_topic": {"title": "A", "content": "A topic content."},
+            "topic_complete": True,
+            "pending_action": "",
+            "checkpoint_indexes": [1, 2],
+            "used_image_ids": [],
+            "lesson_summary": {},
+            "awaiting_reply": True,
+            "lesson_complete": False,
+            "messages": [AIMessage("A topic শেষ করলাম।"), HumanMessage("চলো সামনে যাই")],
+        }
 
-    def test_build_lesson_image_plan_assigns_images_to_matching_topics(self):
-        lesson_chunks = [
-            "তড়িৎ বিভবের ধারণা এবং দুটি বিন্দুর বিভব পার্থক্য।",
-            "সমবিভব তল এবং তড়িৎ বলরেখার সঙ্গে এর সম্পর্ক।",
-        ]
-        images = [
-            {
-                "image_id": "img-potential",
-                "imageURL": "https://example.com/potential.png",
-                "description": "Two points with different electric potential",
-                "topic": ["তড়িৎ বিভব"],
-            },
-            {
-                "image_id": "img-equipotential",
-                "imageURL": "https://example.com/equipotential.png",
-                "description": "Equipotential surface crossing electric field lines",
-                "topic": ["সমবিভব তল"],
-            },
-        ]
+        result = teach(state)
+        merged_state = {**state, **result}
+        advanced = advance_topic(merged_state)
 
-        plan = build_lesson_image_plan(lesson_chunks, images)
-
-        self.assertEqual(plan[0][0]["image_id"], "img-potential")
-        self.assertEqual(plan[1][0]["image_id"], "img-equipotential")
-
-    @patch("graph.simple_graph.load_images_from_database")
-    def test_build_image_candidates_avoids_reusing_used_images(self, mock_load_images):
-        mock_load_images.return_value = [
-            {
-                "image_id": "img-used",
-                "imageURL": "https://example.com/used.png",
-                "description": "Electric field lines around a positive charge",
-                "topic": ["তড়িৎ বলরেখা"],
-            },
-            {
-                "image_id": "img-fresh",
-                "imageURL": "https://example.com/fresh.png",
-                "description": "Electric field lines between two charges",
-                "topic": ["তড়িৎ বলরেখা"],
-            },
-        ]
-
-        candidates = build_image_candidates_for_reply(
-            chapter_name="Static Electricity",
-            lesson_name="তড়িৎ বলরেখা",
-            response_text="এখানে তড়িৎ বলরেখার দিক বোঝানো হচ্ছে।",
-            user_text="ছবি দিয়ে বুঝাও",
-            current_chunk="তড়িৎ বলরেখা ধনাত্মক চার্জ থেকে ঋণাত্মক চার্জের দিকে যায়।",
-            topic_image_map={
-                "0": [
-                    {
-                        "image_id": "img-fresh",
-                        "description": "Electric field lines between two charges",
-                        "topics": ["তড়িৎ বলরেখা"],
-                    }
-                ]
-            },
-            current_chunk_index=0,
-            used_image_ids={"img-used"},
-            tool_selected_images=[],
-        )
-
-        candidate_ids = [item["image_id"] for item in candidates]
-        self.assertNotIn("img-used", candidate_ids)
-        self.assertIn("img-fresh", candidate_ids)
+        self.assertEqual(result["pending_action"], "advance_topic")
+        self.assertEqual(route_after_teach(merged_state), "advance_topic")
+        self.assertEqual(advanced["current_topic_index"], 1)
+        self.assertEqual(advanced["current_topic"]["title"], "B")
 
     @patch("graph.simple_graph.load_images_from_database")
-    def test_build_image_candidates_never_recycles_used_images(self, mock_load_images):
-        mock_load_images.return_value = [
-            {
-                "image_id": "img-used",
-                "imageURL": "https://example.com/used.png",
-                "description": "Electric field lines around a positive charge",
-                "topic": ["তড়িৎ বলরেখা"],
-            }
-        ]
-
-        candidates = build_image_candidates_for_reply(
-            chapter_name="Static Electricity",
-            lesson_name="তড়িৎ বলরেখা",
-            response_text="এখানে তড়িৎ বলরেখার দিক বোঝানো হচ্ছে।",
-            user_text="ছবি দিয়ে বুঝাও",
-            current_chunk="তড়িৎ বলরেখা ধনাত্মক চার্জ থেকে ঋণাত্মক চার্জের দিকে যায়।",
-            topic_image_map={},
-            current_chunk_index=0,
-            used_image_ids={"img-used"},
-            tool_selected_images=[],
-        )
-
-        self.assertEqual(candidates, [])
-
-    @patch("graph.simple_graph.call_llm_for_json")
-    @patch("graph.simple_graph.load_images_from_database")
-    def test_resolve_images_rewrites_database_caption_for_display(self, mock_load_images, mock_call_llm_for_json):
+    def test_resolve_images_returns_catalog_metadata(self, mock_load_images):
         mock_load_images.return_value = [
             {
                 "image_id": "img-1",
                 "imageURL": "https://example.com/potential.png",
-                "description": "Raw database description of two charged points",
+                "description": "Two charged points and their separation",
                 "topic": ["তড়িৎ বিভব"],
             }
         ]
-        mock_call_llm_for_json.return_value = {
-            "images": [
-                {
-                    "image_id": "img-1",
-                    "description": "এখানে দুটি বিন্দুর বিভবের তুলনা দেখানো হয়েছে।",
-                }
-            ]
-        }
 
         resolved = resolve_images_for_response(
             chapter_name="Static Electricity",
             lesson_name="তড়িৎ বিভব",
-            selected_images=[{"image_id": "img-1", "description": "", "topics": ["তড়িৎ বিভব"]}],
-            response_text="এই ছবিতে দুই বিন্দুর বিভবের পার্থক্য বোঝা যাবে।",
-            current_chunk="দুটি বিন্দুর বিভব পার্থক্য কাজের ধারণার সঙ্গে সম্পর্কিত।",
+            selected_images=[{"image_id": "img-1", "imageURL": "", "description": "", "topic": []}],
         )
 
         self.assertEqual(resolved[0]["image_id"], "img-1")
-        self.assertEqual(resolved[0]["description"], "এখানে দুটি বিন্দুর বিভবের তুলনা দেখানো হয়েছে।")
-        self.assertNotEqual(
-            resolved[0]["description"],
-            "Raw database description of two charged points",
-        )
+        self.assertEqual(resolved[0]["imageURL"], "https://example.com/potential.png")
+        self.assertEqual(resolved[0]["description"], "Two charged points and their separation")
 
     def test_compose_chat_markdown_includes_sections_and_sources(self):
         output = compose_chat_markdown(

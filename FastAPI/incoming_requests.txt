@@ -1,1 +1,7 @@
 Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"নিউটনের বলবিদ্যা","lesson_name":"নিউটনের দ্বিতীয় গতি সূত্র : বলের পরিমাপ","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"যার বল বেশি তার ত্বরণ বেশি হবে","user_id":"69a404e8f576e540aeca194e","chapter_name":"নিউটনের বলবিদ্যা","lesson_name":"নিউটনের দ্বিতীয় গতি সূত্র : বলের পরিমাপ","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"move next","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"next","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}

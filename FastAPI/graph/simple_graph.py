@@ -25,9 +25,10 @@ try:
     from langchain_core.tools import tool
     from langchain_groq import ChatGroq
     from langgraph.checkpoint.memory import MemorySaver
-    from langgraph.graph import START, StateGraph
+    from langgraph.graph import END, START, StateGraph
     from langgraph.graph.message import add_messages
     from langgraph.prebuilt import ToolNode
+    from langgraph.prebuilt.tool_node import InjectedState
 except (ImportError, ModuleNotFoundError):
     class BaseMessage:
         def __init__(self, content=None, id=None, name=None, **kwargs):
@@ -35,6 +36,7 @@ except (ImportError, ModuleNotFoundError):
             self.content = content
             self.id = id
             self.name = name
+            self.tool_calls = []
 
     class AIMessage(BaseMessage):
         pass
@@ -60,6 +62,7 @@ except (ImportError, ModuleNotFoundError):
     def tool(_name):
         def decorator(fn):
             return fn
+
         return decorator
 
     class ChatGroq:
@@ -103,7 +106,12 @@ except (ImportError, ModuleNotFoundError):
         def __init__(self, *_args, **_kwargs):
             pass
 
+    class InjectedState:
+        def __init__(self, field=None):
+            self.field = field
+
     START = object()
+    END = object()
 
     def add_messages(existing, incoming):
         current = list(existing or [])
@@ -123,29 +131,13 @@ from graph.llm_logging import invoke_llm_with_logging
 memory = MemorySaver()
 lesson_image_loader = None
 
-IMAGE_TOOL_NAME = "fetch_relevant_lesson_images"
+IMAGE_TOOL_NAME = "fetch_lesson_image"
 DONE_TOKEN = "DONE"
 MAX_RECENT_TURNS = 4
 MAX_RECENT_MESSAGE_CHARS = 4500
 MAX_SUMMARY_BATCH_CHARS = 2600
-MAX_CHUNK_CHARS = 900
-MIN_CHUNK_CHARS = 260
-AUTO_IMAGE_MAX = 2
-IMAGE_CANDIDATE_MAX = 5
 MAX_HISTORY_ITEMS = 8
-MAX_TOPIC_OUTLINE_ITEMS = 5
-MAX_TURNS_PER_TOPIC = 2
-
-TRANSITION_PHRASES = (
-    "এখন আমরা আরেকটা গুরুত্বপূর্ণ ধারণায় যাচ্ছি।",
-    "এই ধারণাটা বুঝলে পরের অংশটা আরও সহজ হবে।",
-    "এখন দেখি এই ধারণা বাস্তবে কিভাবে কাজ করে।",
-)
-
-LESSON_INTRO_PHRASES = (
-    "আজ আমরা এই lesson টি ধাপে ধাপে শিখব।",
-    "চলো, পুরো lesson টা একদম ধাপে ধাপে বুঝে নেই।",
-)
+MAX_TURNS_PER_TOPIC = 4
 
 GROUNDING_SYSTEM_PROMPT = (
     "You are a Bangladeshi HSC physics tutor.\n"
@@ -175,48 +167,12 @@ GROUNDING_SYSTEM_PROMPT = (
 )
 INVALID_JSON_BACKSLASH_PATTERN = re.compile(r'(?<!\\)\\(?!["\\/bfnrtu])')
 LATEX_COMMAND_BACKSLASH_PATTERN = re.compile(
-    r'(?<!\\)\\(?=(?:frac|int|sum|sqrt|cdot|times|left|right|vec|hat|theta|phi|pi|alpha|beta|gamma|lambda|mu|nu|rho|sigma|omega|Delta|delta|tau|sin|cos|tan|text|mathrm|mathbf|pm|quad|qquad|leq|geq|neq|approx)\b)'
+    r"(?<!\\)\\(?=(?:frac|int|sum|sqrt|cdot|times|left|right|vec|hat|theta|phi|pi|alpha|beta|gamma|lambda|mu|nu|rho|sigma|omega|Delta|delta|tau|sin|cos|tan|text|mathrm|mathbf|pm|quad|qquad|leq|geq|neq|approx)\b)"
 )
-LITERAL_NEWLINE_PATTERN = re.compile(r'\\n(?![A-Za-z])')
-LITERAL_TAB_PATTERN = re.compile(r'\\t(?![A-Za-z])')
+LITERAL_NEWLINE_PATTERN = re.compile(r"\\n(?![A-Za-z])")
+LITERAL_TAB_PATTERN = re.compile(r"\\t(?![A-Za-z])")
 
-VISUAL_SUPPORT_HINTS = {
-    "diagram",
-    "figure",
-    "graph",
-    "image",
-    "picture",
-    "vector",
-    "field line",
-    "force line",
-    "circuit",
-    "ray",
-    "চিত্র",
-    "ডায়াগ্রাম",
-    "ডায়াগ্রাম",
-    "ছবি",
-    "বলরেখা",
-    "বর্তনী",
-    "ভেক্টর",
-    "রশ্মি",
-    "গ্রাফ",
-}
-
-BASE_PROMPT = (
-    "You are a Bangladeshi HSC physics tutor.\n"
-    "Teach in very simple Bangla-friendly language.\n"
-    "Teach the lesson smoothly from beginning to end, topic by topic.\n"
-    "Use only the lesson material that is provided in the CURRENT LESSON CHUNK.\n"
-    "Do not bring unrelated topics, extra formulas, or outside explanations.\n"
-    "If the student asks a question, answer it simply but stay inside the current lesson chunk.\n"
-    "Use the same terminology and examples that appear in the lesson.\n"
-    f"When the lesson is fully covered, reply exactly: {DONE_TOKEN}\n"
-    "Only call fetch_relevant_lesson_images when a visual explanation would genuinely help.\n"
-    "If images are shown, the UI will render them inside your reply bubble automatically.\n"
-    "The system already plans lesson images topic by topic and may attach the planned visuals automatically.\n"
-    "Do not get stuck on one chunk by asking very similar conceptual questions again and again.\n"
-    "Never output raw URLs, markdown image tags, JSON, or tool details in the reply."
-)
+FIGURE_TITLE_PATTERN = re.compile(r"চিত্র\s*[0-9০-৯]+(?:\.[0-9০-৯]+)*\s*:\s*([^\n]+)")
 
 UNDERSTOOD_HINTS = {
     "bujhsi",
@@ -301,15 +257,12 @@ class ThreadStateSnapshot(TypedDict, total=False):
     lesson_name: str
     lesson_signature: str
     chat_model: str
-    current_chunk_index: int
     current_topic_index: int
-    lesson_summary: LessonSummary
-    awaiting_student_reply: bool
-    lesson_complete: bool
-    current_chunk_turns: int
     current_topic_turns: int
-    topic_plan: list[str]
-    topic_image_map: dict[str, list[dict[str, Any]]]
+    topic_complete: bool
+    lesson_summary: LessonSummary
+    awaiting_reply: bool
+    lesson_complete: bool
     used_image_ids: list[str]
     checkpoint_indexes: list[int]
     recent_messages: list[dict[str, Any]]
@@ -320,23 +273,17 @@ class State(TypedDict):
     chapter_name: str
     lesson_name: str
     chat_model: str
-    lesson_chunks: list[str]
-    current_chunk_index: int
-    current_chunk_turns: int
+    topics: list[dict[str, str]]
     current_topic_index: int
     current_topic_turns: int
-    topic_plan: list[str]
-    topic_image_map: dict[str, list[dict[str, Any]]]
-    used_image_ids: list[str]
+    current_topic: dict[str, str]
+    topic_complete: bool
+    pending_action: str
     checkpoint_indexes: list[int]
+    used_image_ids: list[str]
     lesson_summary: LessonSummary
-    awaiting_student_reply: bool
+    awaiting_reply: bool
     lesson_complete: bool
-
-
-def configure_image_loader(loader):
-    global lesson_image_loader
-    lesson_image_loader = loader
 
 
 DEFAULT_CHAT_MODEL = "groq:openai/gpt-oss-120b"
@@ -345,6 +292,11 @@ DEFAULT_CHAT_MODEL_CONFIG = {
     "provider": "groq",
     "model": "openai/gpt-oss-120b",
 }
+
+
+def configure_image_loader(loader):
+    global lesson_image_loader
+    lesson_image_loader = loader
 
 
 def repair_invalid_json_backslashes(value):
@@ -554,325 +506,13 @@ def normalize_image_record(item, fallback_index=0):
 
 def compact_image_metadata(image):
     return {
-        "image_id": image.get("image_id", ""),
+        "image_id": str(image.get("image_id") or "").strip(),
+        "imageURL": str(image.get("imageURL") or "").strip(),
         "description": str(image.get("description") or "").strip(),
-        "topics": normalize_topics(image.get("topic")),
     }
 
 
-def query_requests_visual(query_text):
-    normalized = normalize_text(query_text)
-    visual_words = [
-        "diagram",
-        "figure",
-        "image",
-        "picture",
-        "graph",
-        "draw",
-        "চিত্র",
-        "ডায়াগ্রাম",
-        "ডায়াগ্রাম",
-        "ছবি",
-    ]
-    return any(word in normalized for word in visual_words)
-
-
-def chunk_needs_visual_support(text):
-    normalized = normalize_text(text)
-    return any(word in normalized for word in VISUAL_SUPPORT_HINTS)
-
-
-def score_image_relevance(query_text, image):
-    query_tokens = tokenize(query_text)
-    if not query_tokens:
-        return 0
-
-    description_tokens = tokenize(image.get("description"))
-    topic_tokens = set()
-    exact_topic_hits = 0
-
-    for topic in image.get("topic") or []:
-        topic_tokens.update(tokenize(topic))
-        normalized_topic = normalize_text(topic)
-        if normalized_topic and normalized_topic in normalize_text(query_text):
-            exact_topic_hits += 1
-
-    token_overlap = len(query_tokens & (description_tokens | topic_tokens))
-    return token_overlap + (exact_topic_hits * 3)
-
-
-def select_relevant_images(query_text, images, max_images):
-    scored = []
-    for image in images:
-        score = score_image_relevance(query_text, image)
-        if score > 0:
-            scored.append((score, image))
-
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-    selected = [image for _, image in scored[:max_images]]
-
-    if not selected and images and query_requests_visual(query_text):
-        selected = images[:max_images]
-
-    return selected
-
-
-def topic_outline_from_chunks(lesson_chunks, max_items=MAX_TOPIC_OUTLINE_ITEMS):
-    outline = []
-    for chunk in lesson_chunks or []:
-        preview = make_chunk_preview(chunk, limit=90)
-        if not preview:
-            continue
-        if normalize_text(preview) in {normalize_text(item) for item in outline}:
-            continue
-        outline.append(preview)
-        if len(outline) >= max_items:
-            break
-    return outline
-
-
-def build_topic_plan(lesson_chunks):
-    topics = []
-    for index, chunk in enumerate(lesson_chunks or [], start=1):
-        preview = make_chunk_preview(chunk, limit=100)
-        topics.append(preview or f"Topic {index}")
-    return topics
-
-
-def checkpoint_interval_for_lesson(total_chunks):
-    if total_chunks <= 2:
-        return 1
-    if total_chunks <= 4:
-        return 2
-    return 3
-
-
-def build_checkpoint_indexes(topic_count):
-    if topic_count <= 0:
-        return []
-
-    interval = checkpoint_interval_for_lesson(topic_count)
-    indexes = {topic_count - 1}
-    for index in range(topic_count):
-        if interval > 0 and (index + 1) % interval == 0:
-            indexes.add(index)
-    return sorted(indexes)
-
-
-def is_checkpoint_chunk(current_index, lesson_chunks):
-    return int(current_index) in set(build_checkpoint_indexes(len(lesson_chunks or [])))
-
-
-def normalize_checkpoint_indexes(values, topic_count):
-    cleaned = []
-    for value in values or []:
-        try:
-            index = int(value)
-        except Exception:
-            continue
-        if 0 <= index < topic_count and index not in cleaned:
-            cleaned.append(index)
-    return cleaned or build_checkpoint_indexes(topic_count)
-
-
-def normalize_used_image_ids(values):
-    seen = set()
-    cleaned = []
-    for value in values or []:
-        image_id = str(value or "").strip()
-        if not image_id or image_id in seen:
-            continue
-        seen.add(image_id)
-        cleaned.append(image_id)
-    return cleaned
-
-
-def normalize_topic_plan(value, lesson_chunks):
-    expected_count = len(lesson_chunks or [])
-    if expected_count <= 0:
-        if isinstance(value, list):
-            return [str(item or "").strip() for item in value if str(item or "").strip()]
-        return []
-
-    if isinstance(value, list):
-        cleaned = [str(item or "").strip() for item in value[:expected_count]]
-        while len(cleaned) < expected_count:
-            cleaned.append("")
-        fallback = build_topic_plan(lesson_chunks)
-        return [cleaned[index] or fallback[index] for index in range(expected_count)]
-
-    return build_topic_plan(lesson_chunks)
-
-
-def normalize_topic_image_map(value):
-    normalized = {}
-    if not isinstance(value, dict):
-        return normalized
-
-    for key, items in value.items():
-        topic_key = str(key).strip()
-        if not topic_key or not isinstance(items, list):
-            continue
-        normalized[topic_key] = [
-            {
-                "image_id": str(item.get("image_id") or "").strip(),
-                "description": str(item.get("description") or "").strip(),
-                "topics": normalize_topics(item.get("topics")),
-            }
-            for item in items
-            if isinstance(item, dict) and str(item.get("image_id") or "").strip()
-        ][:AUTO_IMAGE_MAX]
-    return normalized
-
-
-def build_topic_image_map(lesson_chunks, images):
-    plan = build_lesson_image_plan(lesson_chunks, images)
-    return {
-        str(index): list(items[:AUTO_IMAGE_MAX])
-        for index, items in plan.items()
-        if items
-    }
-
-
-def get_current_topic_index(state):
-    return int(state.get("current_topic_index", state.get("current_chunk_index", 0)) or 0)
-
-
-def get_current_topic_turns(state):
-    return int(state.get("current_topic_turns", state.get("current_chunk_turns", 0)) or 0)
-
-
-def get_topic_plan(state):
-    return normalize_topic_plan(state.get("topic_plan"), state.get("lesson_chunks") or [])
-
-
-def get_checkpoint_indexes(state):
-    topic_plan = get_topic_plan(state)
-    return normalize_checkpoint_indexes(state.get("checkpoint_indexes"), len(topic_plan))
-
-
-def is_checkpoint_topic(state, topic_index=None):
-    if topic_index is None:
-        topic_index = get_current_topic_index(state)
-    return int(topic_index) in set(get_checkpoint_indexes(state))
-
-
-def get_planned_images_for_topic(state, topic_index=None):
-    if topic_index is None:
-        topic_index = get_current_topic_index(state)
-    topic_image_map = normalize_topic_image_map(state.get("topic_image_map"))
-    return list(topic_image_map.get(str(int(topic_index)), []))
-
-
-def merge_used_image_ids(existing_ids, images):
-    merged = list(normalize_used_image_ids(existing_ids))
-    seen = set(merged)
-    for image in images or []:
-        if not isinstance(image, dict):
-            continue
-        image_id = str(image.get("image_id") or "").strip()
-        if not image_id or image_id in seen:
-            continue
-        seen.add(image_id)
-        merged.append(image_id)
-    return merged
-
-
-def build_transition_line(topic_index):
-    phrase = TRANSITION_PHRASES[int(topic_index) % len(TRANSITION_PHRASES)]
-    return phrase.strip()
-
-
-def build_lesson_intro_line(lesson_name, topic_plan):
-    phrase = LESSON_INTRO_PHRASES[0 if len(topic_plan) <= 2 else 1]
-    lesson_text = str(lesson_name or "").strip()
-    if lesson_text:
-        return f"{phrase} আজকের বিষয় {lesson_text}।"
-    return phrase
-
-
-def filter_selected_images_by_ids(images, excluded_ids):
-    excluded = {str(item).strip() for item in excluded_ids or [] if str(item).strip()}
-    if not excluded:
-        return [item for item in images or [] if isinstance(item, dict)]
-
-    filtered = []
-    for item in images or []:
-        if not isinstance(item, dict):
-            continue
-        image_id = str(item.get("image_id") or "").strip()
-        if image_id and image_id in excluded:
-            continue
-        filtered.append(item)
-    return filtered
-
-
-def build_lesson_image_plan(lesson_chunks, images, max_images_per_chunk=AUTO_IMAGE_MAX):
-    chunk_count = len(lesson_chunks or [])
-    plan = {index: [] for index in range(chunk_count)}
-    if not chunk_count or not images:
-        return plan
-
-    ranked_assignments = []
-    for image in images:
-        image_id = str(image.get("image_id") or "").strip()
-        if not image_id:
-            continue
-
-        for index, chunk in enumerate(lesson_chunks):
-            score = score_image_relevance(chunk, image)
-            if score <= 0:
-                continue
-            ranked_assignments.append((score, index, image))
-
-    ranked_assignments.sort(key=lambda item: (item[0], -item[1]), reverse=True)
-    assigned_ids = set()
-
-    for _score, index, image in ranked_assignments:
-        image_id = str(image.get("image_id") or "").strip()
-        if not image_id or image_id in assigned_ids:
-            continue
-        if len(plan[index]) >= max_images_per_chunk:
-            continue
-
-        plan[index].append(compact_image_metadata(image))
-        assigned_ids.add(image_id)
-
-    return plan
-
-
-def collect_used_image_ids_from_history(history):
-    used_ids = set()
-
-    for entry in history or []:
-        if not isinstance(entry, dict) or entry.get("role") != "assistant":
-            continue
-
-        for image in entry.get("images") or []:
-            if not isinstance(image, dict):
-                continue
-
-            image_id = str(image.get("image_id") or "").strip()
-            if image_id:
-                used_ids.add(image_id)
-                continue
-
-            normalized = normalize_image_record(image)
-            if normalized:
-                used_ids.add(normalized["image_id"])
-
-    return used_ids
-
-
-def load_images_from_database(chapter_name, lesson_name):
-    if lesson_image_loader is None:
-        return []
-
-    try:
-        raw_images = lesson_image_loader(chapter_name, lesson_name) or []
-    except Exception:
-        return []
-
+def normalize_images_for_response(raw_images):
     if not isinstance(raw_images, list):
         return []
 
@@ -880,201 +520,130 @@ def load_images_from_database(chapter_name, lesson_name):
     for index, item in enumerate(raw_images):
         image = normalize_image_record(item, fallback_index=index)
         if image:
-            normalized.append(image)
+            normalized.append(
+                {
+                    "image_id": image["image_id"],
+                    "imageURL": image["imageURL"],
+                    "description": image["description"],
+                    "topic": image["topic"],
+                }
+            )
 
     return normalized
 
 
-@tool(IMAGE_TOOL_NAME)
-def fetch_relevant_lesson_images(chapter_name: str, lesson_name: str, query: str, max_images: int = 2) -> str:
-    """Load lesson images from MongoDB and return compact metadata for the current explanation."""
-    try:
-        safe_max_images = max(1, min(int(max_images or 2), 4))
-    except Exception:
-        safe_max_images = 2
-
-    images = load_images_from_database(chapter_name, lesson_name)
-    if not images:
-        return json.dumps(
-            {
-                "selected_images": [],
-                "reason": "No images were found for this lesson.",
-            },
-            ensure_ascii=False,
-        )
-
-    selected_images = select_relevant_images(query_text=query, images=images, max_images=safe_max_images)
-    compact_selected = [compact_image_metadata(image) for image in selected_images]
-
-    return json.dumps(
-        {
-            "selected_images": compact_selected,
-            "reason": (
-                "Relevant images selected based on topic and description overlap."
-                if compact_selected
-                else "No relevant image matched this explanation."
-            ),
-        },
-        ensure_ascii=False,
-    )
-
-
-def normalize_lesson_text(raw_lesson):
-    if isinstance(raw_lesson, dict):
-        text = raw_lesson.get("content") or raw_lesson.get("lesson_text") or raw_lesson.get("text") or ""
+def normalize_topic_entry(raw_topic, index=0, lesson_name=""):
+    if isinstance(raw_topic, dict):
+        title = str(raw_topic.get("title") or raw_topic.get("topic_title") or raw_topic.get("name") or "").strip()
+        content = str(raw_topic.get("content") or raw_topic.get("text") or "").strip()
     else:
-        text = str(raw_lesson or "").strip()
-        parsed = parse_json_from_text(text)
+        title = ""
+        content = str(raw_topic or "").strip()
+
+    if not title:
+        if lesson_name and index == 0:
+            title = lesson_name
+        else:
+            title = f"Topic {index + 1}"
+
+    return {
+        "title": title,
+        "content": content,
+    }
+
+
+def normalize_lesson_topics(lesson_source, fallback_lesson_name=""):
+    if isinstance(lesson_source, str):
+        parsed = parse_json_from_text(lesson_source)
         if isinstance(parsed, dict):
-            extracted = parsed.get("content") or parsed.get("lesson_text") or parsed.get("text")
-            if extracted:
-                text = extracted
-
-    text = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"^\s*\[Image[^\n]*\]\s*$", "", text, flags=re.IGNORECASE | re.MULTILINE)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
-
-
-def split_long_unit(text, max_chars):
-    cleaned = str(text or "").strip()
-    if not cleaned:
+            return normalize_lesson_topics(parsed, fallback_lesson_name=fallback_lesson_name)
+        content = lesson_source.strip()
+        if content:
+            return [normalize_topic_entry({"title": fallback_lesson_name or "Lesson", "content": content}, 0, fallback_lesson_name)]
         return []
 
-    sentences = re.split(r"(?<=[।.!?])\s+", cleaned)
-    pieces = []
-    buffer = ""
-
-    for sentence in sentences:
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-
-        candidate = sentence if not buffer else f"{buffer} {sentence}"
-        if len(candidate) <= max_chars:
-            buffer = candidate
-            continue
-
-        if buffer:
-            pieces.append(buffer.strip())
-            buffer = ""
-
-        if len(sentence) <= max_chars:
-            buffer = sentence
-            continue
-
-        comma_parts = re.split(r"(?<=[,;:])\s+", sentence)
-        sub_buffer = ""
-        for part in comma_parts:
-            part = part.strip()
-            if not part:
-                continue
-            sub_candidate = part if not sub_buffer else f"{sub_buffer} {part}"
-            if len(sub_candidate) <= max_chars:
-                sub_buffer = sub_candidate
-                continue
-            if sub_buffer:
-                pieces.append(sub_buffer.strip())
-            sub_buffer = part
-        if sub_buffer:
-            pieces.append(sub_buffer.strip())
-
-    if buffer:
-        pieces.append(buffer.strip())
-
-    return pieces
-
-
-def is_heading_like(paragraph):
-    text = str(paragraph or "").strip()
-    if not text:
-        return False
-    if len(text) > 90:
-        return False
-    if re.search(r"[।.!?]", text):
-        return False
-    return True
-
-
-def chunk_lesson_text(lesson_text, max_chunk_chars=MAX_CHUNK_CHARS, min_chunk_chars=MIN_CHUNK_CHARS):
-    cleaned = normalize_lesson_text(lesson_text)
-    if not cleaned:
+    if not isinstance(lesson_source, dict):
         return []
 
-    raw_paragraphs = [part.strip() for part in re.split(r"\n\s*\n", cleaned) if part.strip()]
-    units = []
-    index = 0
+    lesson_name = (
+        str(lesson_source.get("lesson_name") or lesson_source.get("lesson_name_bn") or lesson_source.get("lesson_title") or fallback_lesson_name)
+        .strip()
+    )
+    raw_topics = lesson_source.get("topics")
+    if isinstance(raw_topics, list):
+        normalized = [
+            normalize_topic_entry(topic, index=index, lesson_name=lesson_name)
+            for index, topic in enumerate(raw_topics)
+        ]
+        return [topic for topic in normalized if topic.get("content")]
 
-    while index < len(raw_paragraphs):
-        current = raw_paragraphs[index]
-        if index + 1 < len(raw_paragraphs) and is_heading_like(current):
-            current = f"{current}\n{raw_paragraphs[index + 1]}"
-            index += 2
-        else:
-            index += 1
+    content = str(lesson_source.get("content") or lesson_source.get("lesson_text") or lesson_source.get("text") or "").strip()
+    if not content:
+        return []
 
-        if len(current) > max_chunk_chars:
-            units.extend(split_long_unit(current, max_chunk_chars))
-        else:
-            units.append(current)
-
-    chunks = []
-    buffer = ""
-
-    for unit in units:
-        unit = unit.strip()
-        if not unit:
-            continue
-
-        candidate = unit if not buffer else f"{buffer}\n\n{unit}"
-        if len(candidate) <= max_chunk_chars:
-            buffer = candidate
-            continue
-
-        if buffer:
-            chunks.append(buffer.strip())
-            buffer = ""
-
-        if len(unit) <= max_chunk_chars:
-            buffer = unit
-            continue
-
-        split_units = split_long_unit(unit, max_chunk_chars)
-        for split_unit in split_units:
-            if len(split_unit) >= min_chunk_chars:
-                chunks.append(split_unit.strip())
-            else:
-                if chunks:
-                    chunks[-1] = f"{chunks[-1]}\n\n{split_unit}".strip()
-                else:
-                    buffer = split_unit
-
-    if buffer:
-        chunks.append(buffer.strip())
-
-    if not chunks and cleaned:
-        return [cleaned[:max_chunk_chars].strip()]
-
-    return chunks
+    return [normalize_topic_entry({"title": lesson_name or "Lesson", "content": content}, 0, lesson_name)]
 
 
-def compute_lesson_signature(lesson_chunks):
-    joined = "\n\n".join(lesson_chunks or [])
-    return hashlib.sha1(joined.encode("utf-8")).hexdigest()
+def flatten_lesson_topics_to_text(lesson_source):
+    topics = normalize_lesson_topics(lesson_source)
+    parts = []
+    for topic in topics:
+        title = str(topic.get("title") or "").strip()
+        content = str(topic.get("content") or "").strip()
+        if title:
+            parts.append(title)
+        if content:
+            parts.append(content)
+    return "\n\n".join(parts).strip()
 
 
-def make_chunk_preview(chunk_text, limit=140):
-    text = normalize_lesson_text(chunk_text)
-    if not text:
-        return ""
+def compute_lesson_signature(topics):
+    payload = [
+        {
+            "title": str(topic.get("title") or "").strip(),
+            "content": str(topic.get("content") or "").strip(),
+        }
+        for topic in topics or []
+        if isinstance(topic, dict)
+    ]
+    return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
-    first_line = text.splitlines()[0].strip()
-    preview = first_line if first_line else text
-    preview = re.sub(r"\s+", " ", preview).strip()
+
+def build_topic_preview(topic, limit=140):
+    normalized = normalize_topic_entry(topic)
+    title = str(normalized.get("title") or "").strip()
+    if title:
+        preview = re.sub(r"\s+", " ", title).strip()
+    else:
+        preview = re.sub(r"\s+", " ", str(normalized.get("content") or "").strip())
 
     if len(preview) <= limit:
         return preview
     return preview[: limit - 3].rstrip() + "..."
+
+
+def first_sentence(text, limit=220):
+    cleaned = re.sub(r"\s+", " ", str(text or "").strip())
+    if not cleaned:
+        return ""
+    parts = re.split(r"(?<=[।.!?])\s+", cleaned)
+    sentence = parts[0].strip() if parts else cleaned
+    if len(sentence) <= limit:
+        return sentence
+    return sentence[: limit - 3].rstrip() + "..."
+
+
+def extract_figure_hints(topic_content):
+    hints = []
+    seen = set()
+    for match in FIGURE_TITLE_PATTERN.findall(str(topic_content or "")):
+        hint = str(match or "").strip()
+        key = normalize_text(hint)
+        if not hint or key in seen:
+            continue
+        seen.add(key)
+        hints.append(hint)
+    return hints
 
 
 def default_lesson_summary():
@@ -1146,14 +715,22 @@ def merge_note(existing_items, new_item, max_items=6):
     return dedupe_short_strings(values, max_items=max_items)
 
 
-def build_next_teaching_note(current_chunk_preview, next_chunk_preview, waiting_for_student):
-    if not current_chunk_preview and not next_chunk_preview:
+def build_next_teaching_note(current_topic_preview, next_topic_preview, waiting_for_student):
+    if not current_topic_preview and not next_topic_preview:
         return ""
-    if waiting_for_student and current_chunk_preview and next_chunk_preview:
-        return f"{current_chunk_preview} বুঝেছে কি না নিশ্চিত করে তারপর {next_chunk_preview}"
-    if waiting_for_student and current_chunk_preview:
-        return f"{current_chunk_preview} বুঝেছে কি না নিশ্চিত করা"
-    return next_chunk_preview or current_chunk_preview
+    if waiting_for_student and current_topic_preview and next_topic_preview:
+        return f"{current_topic_preview} বুঝেছে কি না নিশ্চিত করে তারপর {next_topic_preview}"
+    if waiting_for_student and current_topic_preview:
+        return f"{current_topic_preview} বুঝেছে কি না নিশ্চিত করা"
+    return next_topic_preview or current_topic_preview
+
+
+def build_next_progress_note(current_topic_preview, next_topic_preview, waiting_for_student, topic_complete):
+    if not topic_complete:
+        if waiting_for_student and current_topic_preview:
+            return f"{current_topic_preview} এর পরের ছোট অংশ শেখানো"
+        return current_topic_preview or next_topic_preview
+    return build_next_teaching_note(current_topic_preview, next_topic_preview, waiting_for_student)
 
 
 def format_summary_for_prompt(summary):
@@ -1162,20 +739,9 @@ def format_summary_for_prompt(summary):
         f"Taught already: {', '.join(data['taught_concepts']) or 'nothing yet'}",
         f"Student understood: {', '.join(data['understood']) or 'not clear yet'}",
         f"Student confusion: {', '.join(data['confusion']) or 'none noted'}",
-        f"What should happen next: {data['next_to_teach'] or 'teach the current chunk simply'}",
+        f"What should happen next: {data['next_to_teach'] or 'teach the current topic simply'}",
     ]
     return "\n".join(sections)
-
-
-def build_history_image_notes(images):
-    notes = []
-    for image in normalize_images_for_response(images)[:2]:
-        description = image.get("description")
-        note = "Visual"
-        if description:
-            note += f": {description}"
-        notes.append(note)
-    return notes
 
 
 def build_history_messages(history):
@@ -1185,12 +751,7 @@ def build_history_messages(history):
             continue
 
         role = item.get("role")
-        content = extract_text_content(item.get("content"))
-        if role == "assistant":
-            image_notes = build_history_image_notes(item.get("images") or [])
-            if image_notes:
-                content = f"{content}\n\n" + "\n".join(f"- {note}" for note in image_notes)
-
+        content = assistant_history_text(item) if role == "assistant" else extract_text_content(item.get("content"))
         if not content:
             continue
 
@@ -1317,25 +878,6 @@ def build_citations(chapter_name, lesson_name, retrieval):
     ]
 
 
-def normalize_images_for_response(raw_images):
-    if not isinstance(raw_images, list):
-        return []
-
-    normalized = []
-    for index, item in enumerate(raw_images):
-        image = normalize_image_record(item, fallback_index=index)
-        if image:
-            normalized.append(
-                {
-                    "imageURL": image["imageURL"],
-                    "description": image["description"],
-                    "topic": image["topic"],
-                }
-            )
-
-    return normalized
-
-
 def build_message_transcript(messages, include_tools=True, max_chars=0):
     lines = []
     total = 0
@@ -1420,15 +962,6 @@ def trim_message_history(messages, max_turns=MAX_RECENT_TURNS, max_chars=MAX_REC
     return trimmed or list(messages)[-4:]
 
 
-def remove_trimmed_messages(all_messages, kept_messages):
-    kept_ids = {message.id for message in kept_messages if getattr(message, "id", None)}
-    removals = []
-    for message in all_messages or []:
-        if getattr(message, "id", None) and message.id not in kept_ids:
-            removals.append(RemoveMessage(id=message.id))
-    return removals
-
-
 def serialize_messages(messages):
     trimmed = ensure_message_ids(trim_message_history(messages), prefix="snap")
     return messages_to_dict(trimmed)
@@ -1464,16 +997,6 @@ def latest_turn_messages(messages):
     return groups[-1] if groups else []
 
 
-def latest_ai_messages(messages, max_items=2):
-    collected = []
-    for message in reversed(messages or []):
-        if isinstance(message, AIMessage):
-            collected.append(message)
-            if len(collected) >= max_items:
-                break
-    return collected
-
-
 def is_done_response(message):
     if not isinstance(message, AIMessage):
         return False
@@ -1483,53 +1006,6 @@ def is_done_response(message):
 def contains_any_hint(text, hints):
     normalized = normalize_text(text)
     return any(hint in normalized for hint in hints)
-
-
-def extract_question_signature(text):
-    parts = [part.strip() for part in re.split(r"[\n\r]+", str(text or "").strip()) if part.strip()]
-    question_lines = [part for part in parts if "?" in part]
-    if not question_lines:
-        return set()
-    return tokenize(question_lines[-1])
-
-
-def has_repeated_question_pattern(messages):
-    ai_messages = latest_ai_messages(messages, max_items=2)
-    if len(ai_messages) < 2:
-        return False
-
-    latest_signature = extract_question_signature(extract_text_content(ai_messages[0].content))
-    previous_signature = extract_question_signature(extract_text_content(ai_messages[1].content))
-    if not latest_signature or not previous_signature:
-        return False
-
-    overlap = len(latest_signature & previous_signature)
-    minimum = min(len(latest_signature), len(previous_signature))
-    return minimum > 0 and overlap / minimum >= 0.6
-
-
-def ensure_topic_transition(text, state):
-    response_text = str(text or "").strip()
-    if not response_text or response_text.upper() == DONE_TOKEN:
-        return response_text
-
-    current_topic_index = get_current_topic_index(state)
-    current_topic_turns = get_current_topic_turns(state)
-    normalized = normalize_text(response_text)
-
-    if current_topic_turns != 0:
-        return response_text
-
-    prefix = (
-        build_lesson_intro_line(state.get("lesson_name", ""), get_topic_plan(state))
-        if current_topic_index == 0
-        else build_transition_line(current_topic_index)
-    )
-    prefix_normalized = normalize_text(prefix)
-    if prefix_normalized and prefix_normalized in normalized:
-        return response_text
-
-    return f"{prefix}\n\n{response_text}".strip()
 
 
 def call_llm_for_json(llm, system_prompt, user_prompt):
@@ -1557,11 +1033,11 @@ def fallback_history_summary(messages, current_summary=None):
 
     for message in messages or []:
         if isinstance(message, AIMessage):
-            note = make_chunk_preview(extract_text_content(message.content), limit=100)
+            note = build_topic_preview({"title": "", "content": extract_text_content(message.content)}, limit=100)
             summary["taught_concepts"] = merge_note(summary["taught_concepts"], note, max_items=8)
         elif isinstance(message, HumanMessage):
             text = extract_text_content(message.content)
-            short_note = make_chunk_preview(text, limit=100)
+            short_note = build_topic_preview({"title": "", "content": text}, limit=100)
             if contains_any_hint(text, CONFUSION_HINTS) or "?" in text:
                 summary["confusion"] = merge_note(summary["confusion"], short_note)
             elif contains_any_hint(text, UNDERSTOOD_HINTS):
@@ -1644,8 +1120,8 @@ def summarize_older_conversation(llm, chapter_name, lesson_name, history_message
     return fallback_history_summary(history_messages[-6:], summary)
 
 
-def infer_current_chunk_index_heuristic(lesson_chunks, summary, recent_messages):
-    if not lesson_chunks:
+def infer_current_topic_index_heuristic(topics, summary, recent_messages):
+    if not topics:
         return 0
 
     summary_data = sanitize_summary(summary)
@@ -1654,8 +1130,9 @@ def infer_current_chunk_index_heuristic(lesson_chunks, summary, recent_messages)
 
     if next_hint:
         scores = []
-        for index, chunk in enumerate(lesson_chunks):
-            score = len(tokenize(next_hint) & tokenize(chunk))
+        for index, topic in enumerate(topics):
+            topic_text = f"{build_topic_preview(topic)}\n{normalize_topic_entry(topic).get('content', '')}"
+            score = len(tokenize(next_hint) & tokenize(topic_text))
             scores.append((score, index))
         scores.sort(reverse=True)
         if scores and scores[0][0] > 0:
@@ -1671,281 +1148,386 @@ def infer_current_chunk_index_heuristic(lesson_chunks, summary, recent_messages)
         return 0
 
     scores = []
-    for index, chunk in enumerate(lesson_chunks):
-        score = len(tokenize(combined_text) & tokenize(chunk))
+    for index, topic in enumerate(topics):
+        topic_text = f"{build_topic_preview(topic)}\n{normalize_topic_entry(topic).get('content', '')}"
+        score = len(tokenize(combined_text) & tokenize(topic_text))
         scores.append((score, index))
 
     scores.sort(reverse=True)
     if scores and scores[0][0] > 0:
-        return min(scores[0][1], len(lesson_chunks) - 1)
+        return min(scores[0][1], len(topics) - 1)
 
     return 0
 
 
-def infer_current_chunk_index(llm, chapter_name, lesson_name, lesson_chunks, summary, recent_messages):
-    if not lesson_chunks:
+def infer_current_topic_index(llm, chapter_name, lesson_name, topics, summary, recent_messages):
+    if not topics:
         return 0, False
 
     last_ai = latest_ai_message(recent_messages)
     if is_done_response(last_ai):
-        return len(lesson_chunks), True
+        return len(topics), True
 
-    chunk_previews = "\n".join(
-        f"{index}: {make_chunk_preview(chunk, limit=120)}"
-        for index, chunk in enumerate(lesson_chunks)
+    topic_previews = "\n".join(
+        f"{index}: {build_topic_preview(topic, limit=120)}"
+        for index, topic in enumerate(topics)
     )
 
     payload = call_llm_for_json(
         llm=llm,
         system_prompt=(
-            "Choose which lesson chunk should be active on the next tutoring turn.\n"
+            "Choose which lesson topic should be active on the next tutoring turn.\n"
             "Return only valid JSON with:\n"
-            "current_chunk_index: int\n"
+            "current_topic_index: int\n"
             "lesson_complete: bool\n"
             "Rules:\n"
-            "- Use 0-based chunk indexes.\n"
+            "- Use 0-based topic indexes.\n"
             "- If the lesson is already fully covered, set lesson_complete true.\n"
-            "- Pick the chunk that the tutor should work with next."
+            "- Pick the topic that the tutor should work with next."
         ),
         user_prompt=(
             f"Chapter: {chapter_name}\n"
             f"Lesson: {lesson_name}\n\n"
             f"Running summary:\n{json.dumps(sanitize_summary(summary), ensure_ascii=False)}\n\n"
             f"Recent conversation:\n{build_message_transcript(recent_messages, include_tools=False, max_chars=1800)}\n\n"
-            f"Lesson chunk previews:\n{chunk_previews}"
+            f"Lesson topic previews:\n{topic_previews}"
         ),
     )
 
     if isinstance(payload, dict):
         try:
-            index = int(payload.get("current_chunk_index", 0))
+            index = int(payload.get("current_topic_index", 0))
         except Exception:
             index = 0
         lesson_complete = bool(payload.get("lesson_complete"))
-        index = max(0, min(index, len(lesson_chunks)))
+        index = max(0, min(index, len(topics)))
         if lesson_complete:
-            return len(lesson_chunks), True
-        return min(index, len(lesson_chunks) - 1), False
+            return len(topics), True
+        return min(index, len(topics) - 1), False
 
-    return infer_current_chunk_index_heuristic(lesson_chunks, summary, recent_messages), False
+    return infer_current_topic_index_heuristic(topics, summary, recent_messages), False
 
 
-def build_initial_thread_summary(llm, chapter_name, lesson_name, lesson_chunks, history_messages):
+def build_initial_thread_summary(llm, chapter_name, lesson_name, topics, history_messages):
     summary = summarize_older_conversation(llm, chapter_name, lesson_name, history_messages)
     recent_messages = trim_message_history(history_messages)
-    index, lesson_complete = infer_current_chunk_index(
+    index, lesson_complete = infer_current_topic_index(
         llm=llm,
         chapter_name=chapter_name,
         lesson_name=lesson_name,
-        lesson_chunks=lesson_chunks,
+        topics=topics,
         summary=summary,
         recent_messages=recent_messages,
     )
-    current_preview = make_chunk_preview(lesson_chunks[index], limit=100) if lesson_chunks and index < len(lesson_chunks) else ""
-    next_preview = make_chunk_preview(lesson_chunks[index + 1], limit=100) if index + 1 < len(lesson_chunks) else ""
+    current_preview = build_topic_preview(topics[index], limit=100) if topics and index < len(topics) else ""
+    next_preview = build_topic_preview(topics[index + 1], limit=100) if index + 1 < len(topics) else ""
     summary["next_to_teach"] = (
         ""
         if lesson_complete
-        else build_next_teaching_note(current_preview, next_preview, waiting_for_student=bool(recent_messages))
+        else build_next_progress_note(
+            current_preview,
+            next_preview,
+            waiting_for_student=bool(recent_messages),
+            topic_complete=False,
+        )
     )
     return sanitize_summary(summary), index, lesson_complete
 
 
-def should_advance_chunk_with_llm(llm, state, latest_user_text):
-    current_chunk = get_current_chunk_text(state)
-    if not current_chunk:
-        return False
-
-    payload = call_llm_for_json(
-        llm=llm,
-        system_prompt=(
-            "Decide if the tutor should move to the next lesson topic now.\n"
-            "Return only valid JSON with:\n"
-            "advance: bool\n"
-            "Rules:\n"
-            "- True if the student's latest message shows enough understanding, gives a reasonable conceptual answer, or clearly asks to continue.\n"
-            "- If the tutor has already spent multiple turns on the same topic, prefer moving forward unless the student is still explicitly confused.\n"
-            "- False if the student is confused, asking for clarification, or still discussing the same concept."
-        ),
-        user_prompt=(
-            f"Current lesson summary:\n{json.dumps(sanitize_summary(state.get('lesson_summary')), ensure_ascii=False)}\n\n"
-            f"Current chunk:\n{current_chunk}\n\n"
-            f"Recent conversation:\n{build_message_transcript(trim_message_history(state.get('messages'), max_turns=2, max_chars=1800), include_tools=False)}\n\n"
-            f"Latest student message:\n{latest_user_text}"
-        ),
-    )
-
-    if not isinstance(payload, dict):
-        return False
-
-    return bool(payload.get("advance"))
+def checkpoint_interval_for_lesson(total_topics):
+    if total_topics <= 2:
+        return 1
+    if total_topics <= 4:
+        return 2
+    return 3
 
 
-def should_move_forward_after_checkpoint(state, user_text):
-    normalized = normalize_text(user_text)
-    if not normalized:
-        return False
-    if contains_any_hint(user_text, CONFUSION_HINTS):
-        return False
-    if "?" in user_text:
-        return False
+def build_checkpoint_indexes(topic_count):
+    if topic_count <= 0:
+        return []
 
-    simple_affirmations = {"হ্যাঁ", "জি", "ঠিক", "yes", "ok", "okay", "right"}
-    if normalized in simple_affirmations:
-        return False
-
-    if contains_any_hint(user_text, UNDERSTOOD_HINTS) and len(normalized) > 12:
-        return True
-    if len(tokenize(user_text)) >= 4:
-        return should_advance_chunk_with_llm(get_llm(get_state_chat_model(state)), state, user_text)
-
-    return False
+    interval = checkpoint_interval_for_lesson(topic_count)
+    indexes = {topic_count - 1}
+    for index in range(topic_count):
+        if interval > 0 and (index + 1) % interval == 0:
+            indexes.add(index)
+    return sorted(indexes)
 
 
-def should_advance_to_next_chunk(state):
-    if state.get("lesson_complete"):
-        return False
-    if not state.get("awaiting_student_reply"):
-        return False
-
-    last_user = latest_human_message(state.get("messages"))
-    if last_user is None:
-        return False
-
-    user_text = extract_text_content(last_user.content)
-    normalized = normalize_text(user_text)
-    current_chunk_turns = get_current_topic_turns(state)
-    checkpoint_due = is_checkpoint_topic(state)
-    if not normalized:
-        return False
-
-    if current_chunk_turns >= MAX_TURNS_PER_TOPIC:
-        return True
-    if has_repeated_question_pattern(state.get("messages")):
-        return True
-    if contains_any_hint(user_text, CONTINUE_HINTS):
-        return True
-
-    if not checkpoint_due:
-        if contains_any_hint(user_text, CONFUSION_HINTS):
-            return False
-        if "?" in user_text and current_chunk_turns < MAX_TURNS_PER_TOPIC:
-            return False
-        return True
-
-    if contains_any_hint(user_text, CONFUSION_HINTS):
-        return False
-    if "?" in user_text and current_chunk_turns <= 1 and not contains_any_hint(user_text, CONTINUE_HINTS):
-        return False
-    return should_move_forward_after_checkpoint(state, user_text)
+def normalize_checkpoint_indexes(values, topic_count):
+    cleaned = []
+    for value in values or []:
+        try:
+            index = int(value)
+        except Exception:
+            continue
+        if 0 <= index < topic_count and index not in cleaned:
+            cleaned.append(index)
+    return cleaned or build_checkpoint_indexes(topic_count)
 
 
-def get_current_chunk_text(state):
-    lesson_chunks = state.get("lesson_chunks") or []
-    current_index = get_current_topic_index(state)
-    if current_index < 0 or current_index >= len(lesson_chunks):
-        return ""
-    return lesson_chunks[current_index]
+def normalize_used_image_ids(values):
+    seen = set()
+    cleaned = []
+    for value in values or []:
+        image_id = str(value or "").strip()
+        if not image_id or image_id in seen:
+            continue
+        seen.add(image_id)
+        cleaned.append(image_id)
+    return cleaned
 
 
-def lesson_has_visuals(chapter_name, lesson_name):
-    return bool(load_images_from_database(chapter_name, lesson_name))
+def merge_used_image_ids(existing_ids, images):
+    merged = list(normalize_used_image_ids(existing_ids))
+    seen = set(merged)
+    for image in images or []:
+        if not isinstance(image, dict):
+            continue
+        image_id = str(image.get("image_id") or "").strip()
+        if not image_id or image_id in seen:
+            continue
+        seen.add(image_id)
+        merged.append(image_id)
+    return merged
 
 
-def build_planned_visual_notes(state):
-    topic_plan = get_topic_plan(state)
-    current_index = get_current_topic_index(state)
-    if current_index < 0 or current_index >= len(topic_plan):
-        return "No planned image for this topic."
+def collect_used_image_ids_from_history(history):
+    used_ids = set()
 
-    planned = get_planned_images_for_topic(state, current_index)
-    if not planned:
-        return "No planned image for this topic."
+    for entry in history or []:
+        if not isinstance(entry, dict) or entry.get("role") != "assistant":
+            continue
 
-    notes = []
-    for image in planned[:AUTO_IMAGE_MAX]:
-        description = str(image.get("description") or "").strip()
-        topics = normalize_topics(image.get("topics"))
-        topic_note = f"Topics: {', '.join(topics)}" if topics else ""
-        note = "Planned visual"
-        if description:
-            note += f": {description}"
-        if topic_note:
-            note += f" ({topic_note})"
-        notes.append(note)
+        for image in entry.get("images") or []:
+            if not isinstance(image, dict):
+                continue
 
-    return "\n".join(f"- {note}" for note in notes)
+            image_id = str(image.get("image_id") or "").strip()
+            if image_id:
+                used_ids.add(image_id)
+                continue
+
+            normalized = normalize_image_record(image)
+            if normalized:
+                used_ids.add(normalized["image_id"])
+
+    return used_ids
 
 
-def build_current_teaching_prompt(state):
-    lesson_chunks = state.get("lesson_chunks") or []
-    topic_plan = get_topic_plan(state)
-    current_index = get_current_topic_index(state)
-    current_chunk_turns = get_current_topic_turns(state)
-    current_chunk = get_current_chunk_text(state)
-    total_chunks = len(topic_plan)
-    summary_text = format_summary_for_prompt(state.get("lesson_summary"))
-    has_visuals = lesson_has_visuals(state.get("chapter_name", ""), state.get("lesson_name", ""))
-    current_preview = topic_plan[current_index] if current_index < total_chunks else ""
-    previous_preview = topic_plan[current_index - 1] if current_index > 0 else ""
-    next_preview = topic_plan[current_index + 1] if current_index + 1 < total_chunks else ""
-    lesson_outline = topic_outline_from_chunks(topic_plan)
-    outline_text = "\n- ".join(lesson_outline or ["Current lesson"])
-    checkpoint_due = is_checkpoint_topic(state, current_index)
-    planned_visuals = build_planned_visual_notes(state)
+def load_images_from_database(chapter_name, lesson_name):
+    if lesson_image_loader is None:
+        return []
 
-    return (
-        f"{BASE_PROMPT}\n\n"
-        f"Chapter: {state.get('chapter_name', '')}\n"
-        f"Lesson: {state.get('lesson_name', '')}\n"
-        f"Current step: {min(current_index + 1, max(total_chunks, 1))}/{max(total_chunks, 1)}\n"
-        f"Teaching turns already spent on this topic: {current_chunk_turns}\n"
-        f"Current topic preview: {current_preview or 'Unknown'}\n"
-        f"Previous topic preview: {previous_preview or 'None yet'}\n"
-        f"Next topic preview: {next_preview or 'This is the final topic'}\n"
-        f"Checkpoint question due on this topic: {'yes' if checkpoint_due else 'no'}\n"
-        f"Visual aids available for this lesson: {'yes' if has_visuals else 'no'}\n"
-        f"Max turns allowed on this topic: {MAX_TURNS_PER_TOPIC}\n"
-        f"Lesson topic path:\n- {outline_text}\n"
-        f"Planned visuals for this topic:\n{planned_visuals}\n"
-        f"Running summary:\n{summary_text}\n\n"
-        "Follow these turn rules:\n"
-        "- Use only the CURRENT LESSON CHUNK below.\n"
-        "- Keep the reply short, clear, and connected to the previous topic.\n"
-        "- Every topic must follow this structure: mini introduction, core explanation, optional example, and checkpoint question only if checkpoint question due is yes.\n"
-        "- On the very first lesson turn, briefly introduce the whole lesson before teaching the first topic.\n"
-        "- When entering a new topic after the first one, you must begin with a natural Bangla transition line before teaching.\n"
-        "- Do not ask a conceptual check on every topic.\n"
-        "- Ask one conceptual question only when checkpoint question due is yes.\n"
-        "- If checkpoint question due is no, teach the topic and stop naturally without adding a check-question.\n"
-        "- If checkpoint question due is yes and this is the first teaching turn on this topic, teach clearly and then ask one conceptual question.\n"
-        "- If the student answer is unclear on a checkpoint topic, explain the idea more clearly once and ask one improved follow-up question.\n"
-        "- If you already spent two or more teaching turns on this topic, do not ask another conceptual question. End the topic and prepare to move on.\n"
-        "- Do not repeat the same kind of question with different wording.\n"
-        "- Planned visuals are already reserved topic by topic. Prefer those visuals when they fit this topic.\n"
-        "- Use at most 1 or 2 images for this topic and do not reuse previously used images.\n"
-        "- Call fetch_relevant_lesson_images only if the planned visuals clearly do not fit and a different visual is genuinely needed.\n"
-        f"- When the lesson is fully covered, reply with only {DONE_TOKEN}.\n\n"
-        f"CURRENT LESSON CHUNK:\n{current_chunk}"
+    try:
+        raw_images = lesson_image_loader(chapter_name, lesson_name) or []
+    except Exception:
+        return []
+
+    if not isinstance(raw_images, list):
+        return []
+
+    normalized = []
+    for index, item in enumerate(raw_images):
+        image = normalize_image_record(item, fallback_index=index)
+        if image:
+            normalized.append(image)
+
+    return normalized
+
+
+def score_image_relevance(query_text, image):
+    query_tokens = tokenize(query_text)
+    description_tokens = tokenize(image.get("description"))
+    if not query_tokens or not description_tokens:
+        return 0
+
+    overlap = len(query_tokens & description_tokens)
+    normalized_query = normalize_text(query_text)
+    normalized_description = normalize_text(image.get("description"))
+    if normalized_query and normalized_query in normalized_description:
+        overlap += 2
+    return overlap
+
+
+@tool(IMAGE_TOOL_NAME)
+def fetch_lesson_image(
+    chapter_name: str,
+    lesson_name: str,
+    hint: str,
+    used_image_ids: Annotated[list[str], InjectedState("used_image_ids")] = None,
+) -> str:
+    """
+    Search lesson images using a চিত্র title hint from the lesson content.
+    Reads ALL image descriptions one by one and picks the best unused match.
+    Returns compact image metadata or a not-found message.
+    """
+
+    images = load_images_from_database(chapter_name, lesson_name)
+    excluded_ids = {str(item).strip() for item in used_image_ids or [] if str(item).strip()}
+
+    best_image = None
+    best_score = 0
+    for image in images:
+        image_id = str(image.get("image_id") or "").strip()
+        if not image_id or image_id in excluded_ids:
+            continue
+        score = score_image_relevance(hint, image)
+        if score > best_score:
+            best_score = score
+            best_image = image
+
+    if best_image is None or best_score <= 0:
+        return json.dumps({"found": False}, ensure_ascii=False)
+
+    return json.dumps(
+        {
+            "found": True,
+            "image_id": best_image["image_id"],
+            "imageURL": best_image["imageURL"],
+            "description": best_image["description"],
+        },
+        ensure_ascii=False,
     )
 
 
-def prepare_prompt_messages(state):
-    recent_messages = trim_message_history(state.get("messages"))
-    prompt = build_current_teaching_prompt(state)
-    return [SystemMessage(content=prompt), *recent_messages]
+def extract_selected_images_from_tool_messages(messages):
+    selected_images = []
+    seen_ids = set()
+
+    for message in messages or []:
+        if not isinstance(message, ToolMessage):
+            continue
+        if getattr(message, "name", "") != IMAGE_TOOL_NAME:
+            continue
+
+        payload = parse_json_from_text(extract_text_content(message.content))
+        if not isinstance(payload, dict) or not payload.get("found"):
+            continue
+
+        image_id = str(payload.get("image_id") or "").strip()
+        image_url = str(payload.get("imageURL") or "").strip()
+        if not image_id or not image_url or image_id in seen_ids:
+            continue
+
+        seen_ids.add(image_id)
+        selected_images.append(
+            {
+                "image_id": image_id,
+                "imageURL": image_url,
+                "description": str(payload.get("description") or "").strip(),
+                "topic": [],
+            }
+        )
+
+    return selected_images
+
+
+def merge_selected_images(*groups, max_images=8):
+    merged = []
+    seen_ids = set()
+
+    for group in groups:
+        for item in group or []:
+            if not isinstance(item, dict):
+                continue
+            image_id = str(item.get("image_id") or "").strip()
+            if not image_id or image_id in seen_ids:
+                continue
+            seen_ids.add(image_id)
+            merged.append(
+                {
+                    "image_id": image_id,
+                    "imageURL": str(item.get("imageURL") or "").strip(),
+                    "description": str(item.get("description") or "").strip(),
+                    "topic": normalize_topics(item.get("topic")),
+                }
+            )
+            if len(merged) >= max_images:
+                return merged
+
+    return merged
+
+
+def resolve_images_for_response(
+    chapter_name,
+    lesson_name,
+    selected_images,
+    response_text="",
+    current_topic=None,
+    chat_model=None,
+):
+    del response_text, current_topic, chat_model
+
+    if not selected_images:
+        return []
+
+    catalog = {
+        image["image_id"]: image
+        for image in load_images_from_database(chapter_name, lesson_name)
+    }
+    resolved = []
+    for item in selected_images:
+        image_id = str(item.get("image_id") or "").strip()
+        if not image_id:
+            continue
+
+        catalog_item = catalog.get(image_id, {})
+        image_url = str(item.get("imageURL") or catalog_item.get("imageURL") or "").strip()
+        if not image_url:
+            continue
+
+        resolved.append(
+            {
+                "image_id": image_id,
+                "imageURL": image_url,
+                "description": str(item.get("description") or catalog_item.get("description") or "").strip(),
+                "topic": normalize_topics(item.get("topic") or catalog_item.get("topic")),
+            }
+        )
+
+    return resolved
+
+
+def get_current_topic_index(state):
+    return int(state.get("current_topic_index", 0) or 0)
+
+
+def get_current_topic_turns(state):
+    return int(state.get("current_topic_turns", 0) or 0)
+
+
+def get_current_topic(state):
+    topic = state.get("current_topic")
+    if isinstance(topic, dict):
+        return normalize_topic_entry(topic)
+    topics = state.get("topics") or []
+    index = get_current_topic_index(state)
+    if 0 <= index < len(topics):
+        return normalize_topic_entry(topics[index], index=index, lesson_name=state.get("lesson_name", ""))
+    return {}
+
+
+def get_checkpoint_indexes(state):
+    return normalize_checkpoint_indexes(state.get("checkpoint_indexes"), len(state.get("topics") or []))
+
+
+def is_checkpoint_topic(state, topic_index=None):
+    if topic_index is None:
+        topic_index = get_current_topic_index(state)
+    return int(topic_index) in set(get_checkpoint_indexes(state))
 
 
 def fallback_summary_update(state):
     summary = sanitize_summary(state.get("lesson_summary"))
-    current_chunk = get_current_chunk_text(state)
-    current_preview = make_chunk_preview(current_chunk, limit=100)
-    next_chunk_preview = ""
+    current_topic = get_current_topic(state)
+    current_preview = build_topic_preview(current_topic, limit=100)
+    next_preview = ""
 
-    topic_plan = get_topic_plan(state)
+    topics = state.get("topics") or []
     current_index = get_current_topic_index(state)
-    if current_index + 1 < len(topic_plan):
-        next_chunk_preview = topic_plan[current_index + 1]
+    if current_index + 1 < len(topics):
+        next_preview = build_topic_preview(topics[current_index + 1], limit=100)
 
     last_ai = latest_ai_message(state.get("messages"))
     if current_preview and last_ai and not is_done_response(last_ai):
@@ -1954,7 +1536,7 @@ def fallback_summary_update(state):
     last_user = latest_human_message(state.get("messages"))
     if last_user is not None:
         user_text = extract_text_content(last_user.content)
-        user_note = make_chunk_preview(user_text, limit=100)
+        user_note = build_topic_preview({"title": "", "content": user_text}, limit=100)
         if contains_any_hint(user_text, CONFUSION_HINTS) or "?" in user_text:
             summary["confusion"] = merge_note(summary["confusion"], user_note)
         elif contains_any_hint(user_text, UNDERSTOOD_HINTS):
@@ -1963,20 +1545,25 @@ def fallback_summary_update(state):
     summary["next_to_teach"] = (
         ""
         if state.get("lesson_complete")
-        else build_next_teaching_note(current_preview, next_chunk_preview, waiting_for_student=True)
+        else build_next_progress_note(
+            current_preview,
+            next_preview,
+            waiting_for_student=bool(state.get("awaiting_reply")),
+            topic_complete=bool(state.get("topic_complete")),
+        )
     )
     return sanitize_summary(summary)
 
 
 def update_running_summary(state):
     llm = get_llm(get_state_chat_model(state))
-    current_chunk = get_current_chunk_text(state)
-    current_preview = make_chunk_preview(current_chunk, limit=100)
-    topic_plan = get_topic_plan(state)
+    current_topic = get_current_topic(state)
+    current_preview = build_topic_preview(current_topic, limit=100)
+    topics = state.get("topics") or []
     current_index = get_current_topic_index(state)
-    next_chunk_preview = ""
-    if current_index + 1 < len(topic_plan):
-        next_chunk_preview = topic_plan[current_index + 1]
+    next_preview = ""
+    if current_index + 1 < len(topics):
+        next_preview = build_topic_preview(topics[current_index + 1], limit=100)
 
     recent_messages = trim_message_history(state.get("messages"), max_turns=2, max_chars=2200)
     payload = call_llm_for_json(
@@ -1990,13 +1577,13 @@ def update_running_summary(state):
             "next_to_teach: str\n"
             "Rules:\n"
             "- Keep items short and concrete.\n"
-            "- Do not mention anything outside the given chunk and conversation.\n"
+            "- Do not mention anything outside the given topic and conversation.\n"
             "- Capture only the most useful ongoing memory."
         ),
         user_prompt=(
             f"Previous summary:\n{json.dumps(sanitize_summary(state.get('lesson_summary')), ensure_ascii=False)}\n\n"
-            f"Current chunk:\n{current_chunk}\n\n"
-            f"Next chunk preview:\n{next_chunk_preview or 'None'}\n\n"
+            f"Current topic:\n{json.dumps(current_topic, ensure_ascii=False)}\n\n"
+            f"Next topic preview:\n{next_preview or 'None'}\n\n"
             f"Recent conversation:\n{build_message_transcript(recent_messages, include_tools=False)}"
         ),
     )
@@ -2014,122 +1601,476 @@ def update_running_summary(state):
     if state.get("lesson_complete"):
         summary["next_to_teach"] = ""
     else:
-        summary["next_to_teach"] = summary.get("next_to_teach") or build_next_teaching_note(
+        summary["next_to_teach"] = summary.get("next_to_teach") or build_next_progress_note(
             current_preview,
-            next_chunk_preview,
-            waiting_for_student=True,
+            next_preview,
+            waiting_for_student=bool(state.get("awaiting_reply")),
+            topic_complete=bool(state.get("topic_complete")),
         )
 
     return sanitize_summary(summary)
 
 
-def advance_turn(state: State):
-    if not should_advance_to_next_chunk(state):
-        return {}
+def should_advance_topic_with_llm(llm, state, latest_user_text):
+    current_topic = get_current_topic(state)
+    if not current_topic.get("content"):
+        return False
 
-    topic_plan = get_topic_plan(state)
-    current_index = get_current_topic_index(state)
-    next_index = current_index + 1
+    payload = call_llm_for_json(
+        llm=llm,
+        system_prompt=(
+            "Decide if the tutor should move to the next lesson topic now.\n"
+            "Return only valid JSON with:\n"
+            "advance: bool\n"
+            "Rules:\n"
+            "- True if the student's latest message shows enough understanding, gives a reasonable conceptual answer, or clearly asks to continue.\n"
+            "- If the tutor has already spent multiple turns on the same topic, prefer moving forward unless the student is still explicitly confused.\n"
+            "- False if the student is confused, asking for clarification, or still discussing the same concept."
+        ),
+        user_prompt=(
+            f"Current lesson summary:\n{json.dumps(sanitize_summary(state.get('lesson_summary')), ensure_ascii=False)}\n\n"
+            f"Current topic:\n{json.dumps(current_topic, ensure_ascii=False)}\n\n"
+            f"Recent conversation:\n{build_message_transcript(trim_message_history(state.get('messages'), max_turns=2, max_chars=1800), include_tools=False)}\n\n"
+            f"Latest student message:\n{latest_user_text}"
+        ),
+    )
 
-    if next_index >= len(topic_plan):
-        summary = sanitize_summary(state.get("lesson_summary"), fallback_next="")
-        summary["next_to_teach"] = ""
-        return {
-            "current_topic_index": len(topic_plan),
-            "current_chunk_index": len(topic_plan),
-            "current_topic_turns": 0,
-            "current_chunk_turns": 0,
-            "lesson_complete": True,
-            "awaiting_student_reply": False,
-            "lesson_summary": summary,
-        }
+    if not isinstance(payload, dict):
+        return False
 
-    next_preview = topic_plan[next_index]
-    summary = sanitize_summary(state.get("lesson_summary"), fallback_next=next_preview)
-    summary["next_to_teach"] = next_preview
+    return bool(payload.get("advance"))
+
+
+def should_advance_to_next_chunk(state):
+    if state.get("lesson_complete"):
+        return False
+    if not state.get("awaiting_reply"):
+        return False
+
+    last_user = latest_human_message(state.get("messages"))
+    if last_user is None:
+        return False
+
+    user_text = extract_text_content(last_user.content)
+    normalized = normalize_text(user_text)
+    current_topic_turns = get_current_topic_turns(state)
+    if not normalized:
+        return False
+
+    if current_topic_turns >= MAX_TURNS_PER_TOPIC:
+        return True
+    if contains_any_hint(user_text, CONTINUE_HINTS):
+        return True
+    if contains_any_hint(user_text, CONFUSION_HINTS):
+        return False
+    if "?" in user_text and not contains_any_hint(user_text, UNDERSTOOD_HINTS):
+        return False
+    if contains_any_hint(user_text, UNDERSTOOD_HINTS):
+        return True
+    if len(tokenize(user_text)) >= 4:
+        return should_advance_topic_with_llm(get_llm(get_state_chat_model(state)), state, user_text)
+    return False
+
+
+def plan_next_teaching_step(state):
+    llm = get_llm(get_state_chat_model(state))
+    current_topic = get_current_topic(state)
+    current_turns = get_current_topic_turns(state)
+    checkpoint_due = is_checkpoint_topic(state)
+    recent_messages = trim_message_history(state.get("messages"), max_turns=2, max_chars=2200)
+    content = str(current_topic.get("content") or "").strip()
+
+    payload = call_llm_for_json(
+        llm=llm,
+        system_prompt=(
+            "Plan the next micro-step for a Bangladeshi HSC physics tutor.\n"
+            "Return only valid JSON with this schema:\n"
+            '{\n'
+            '  "next_focus": "string",\n'
+            '  "remaining_after_this_reply": "string",\n'
+            '  "topic_complete_after_reply": true,\n'
+            '  "ask_checkpoint_now": false\n'
+            '}\n'
+            "Rules:\n"
+            "- The tutor must teach the FULL topic over multiple short replies, not one long dump.\n"
+            "- next_focus must be only the next small concept or one tightly related pair of ideas.\n"
+            "- topic_complete_after_reply is true only if the next reply should finish the remaining untaught ideas for this topic.\n"
+            "- ask_checkpoint_now is true only if checkpoint is due and the next reply should finish the topic before asking exactly one conceptual question.\n"
+            "- Use the running summary and recent conversation to avoid repetition.\n"
+            "- Do not skip concepts, but spread them across several replies."
+        ),
+        user_prompt=(
+            f"Chapter: {state.get('chapter_name', '')}\n"
+            f"Lesson: {state.get('lesson_name', '')}\n"
+            f"Checkpoint due: {'yes' if checkpoint_due else 'no'}\n"
+            f"Current topic turns already used: {current_turns} / {MAX_TURNS_PER_TOPIC}\n\n"
+            f"Running summary:\n{json.dumps(sanitize_summary(state.get('lesson_summary')), ensure_ascii=False)}\n\n"
+            f"Recent conversation:\n{build_message_transcript(recent_messages, include_tools=False)}\n\n"
+            f"Current topic:\n{json.dumps(current_topic, ensure_ascii=False)}"
+        ),
+    )
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    next_focus = str(payload.get("next_focus") or "").strip() or first_sentence(content, limit=140) or build_topic_preview(current_topic, limit=100)
+    remaining_after_this_reply = str(payload.get("remaining_after_this_reply") or "").strip()
+    topic_complete_after_reply = bool(payload.get("topic_complete_after_reply"))
+    ask_checkpoint_now = bool(payload.get("ask_checkpoint_now")) and checkpoint_due
+
+    if current_turns + 1 >= MAX_TURNS_PER_TOPIC:
+        topic_complete_after_reply = True
+    if ask_checkpoint_now and not topic_complete_after_reply:
+        ask_checkpoint_now = False
+
     return {
-        "current_topic_index": next_index,
-        "current_chunk_index": next_index,
-        "current_topic_turns": 0,
-        "current_chunk_turns": 0,
-        "awaiting_student_reply": False,
-        "lesson_summary": summary,
+        "next_focus": next_focus,
+        "remaining_after_this_reply": remaining_after_this_reply,
+        "topic_complete_after_reply": topic_complete_after_reply,
+        "ask_checkpoint_now": ask_checkpoint_now,
     }
 
 
-def assistant(state: State):
+def build_current_teaching_prompt(state, teaching_plan=None):
+    topics = state.get("topics") or []
+    current_index = get_current_topic_index(state)
+    current_topic = get_current_topic(state)
+    total = max(len(topics), 1)
+    checkpoint_due = is_checkpoint_topic(state, current_index)
+    figure_hints = extract_figure_hints(current_topic.get("content"))
+    figure_line = ", ".join(figure_hints) if figure_hints else "none detected"
+    teaching_plan = teaching_plan if isinstance(teaching_plan, dict) else {}
+    next_focus = str(teaching_plan.get("next_focus") or "").strip() or build_topic_preview(current_topic, limit=100)
+    remaining_after_this_reply = str(teaching_plan.get("remaining_after_this_reply") or "").strip() or "unknown"
+    topic_complete_after_reply = bool(teaching_plan.get("topic_complete_after_reply"))
+    ask_checkpoint_now = bool(teaching_plan.get("ask_checkpoint_now")) and checkpoint_due
+
+    return (
+        "You are a Bangladeshi HSC physics tutor. Teach the following topic to a student.\n\n"
+        f"Chapter: {state.get('chapter_name', '')}\n"
+        f"Lesson: {state.get('lesson_name', '')}\n"
+        f"Topic {min(current_index + 1, total)} of {total}: {current_topic.get('title', '')}\n\n"
+        "Rules:\n"
+        "- Read the FULL topic content below carefully before replying\n"
+        "- Explain every concept clearly using simple Bangla-friendly language across MULTIPLE small replies\n"
+        "- Do NOT skip any part of the content overall, but do NOT cover the whole topic in one reply unless the plan says this reply should finish it\n"
+        "- In this reply, teach only the next small concept or one tightly related pair of ideas\n"
+        "- Use analogies and simplified examples to aid understanding\n"
+        "- If the content mentions a চিত্র (diagram), call fetch_lesson_image with the চিত্র title as the hint. If an image is returned, describe what it shows in your own words to strengthen the explanation. Never paste the database description directly.\n"
+        "- Keep this reply small: at most 3 short paragraphs and roughly 120-180 words unless a tiny extra clarification is necessary\n"
+        f"- Checkpoint due for this topic: {'yes' if checkpoint_due else 'no'}\n"
+        f"- Ask checkpoint question in this reply: {'yes' if ask_checkpoint_now else 'no'}\n"
+        "- If checkpoint question in this reply is yes: after teaching, ask exactly ONE conceptual question\n"
+        "- If checkpoint question in this reply is no: end the reply naturally without asking a question\n"
+        f"- When the very last topic is complete: reply only with {DONE_TOKEN}\n"
+        "- Never output raw URLs, markdown image tags, JSON, or tool details in the reply\n"
+        f"- Running summary:\n{format_summary_for_prompt(state.get('lesson_summary'))}\n"
+        f"- Next small concept to teach now: {next_focus}\n"
+        f"- Topic will be complete after this reply: {'yes' if topic_complete_after_reply else 'no'}\n"
+        f"- What should remain after this reply: {remaining_after_this_reply}\n"
+        f"- Figure hints detected in the topic text: {figure_line}\n\n"
+        "FULL TOPIC CONTENT:\n"
+        f"{current_topic.get('content', '')}"
+    )
+
+
+def prepare_teach_messages(state, teaching_plan=None):
+    recent_messages = trim_message_history(state.get("messages"))
+    prompt = build_current_teaching_prompt(state, teaching_plan=teaching_plan)
+    return [SystemMessage(content=prompt), *recent_messages]
+
+
+def build_understanding_follow_up(state):
+    current_topic = get_current_topic(state)
+    topic_title = str(current_topic.get("title") or "এই topic").strip()
+    key_line = first_sentence(current_topic.get("content"), limit=180)
+    if key_line:
+        return (
+            f"আরেকবার সহজভাবে বলি। {key_line}\n\n"
+            f"এখন নিজের ভাষায় বলো, {topic_title} এর মূল ধারণা কী?"
+        ).strip()
+    return f"আরেকবার সহজভাবে বলি। এখন নিজের ভাষায় বলো, {topic_title} এর মূল ধারণা কী?"
+
+
+def select_topic(state: State):
+    topics = state.get("topics") or []
+    current_index = get_current_topic_index(state)
+
+    if state.get("lesson_complete") or current_index >= len(topics):
+        summary = sanitize_summary(state.get("lesson_summary"), fallback_next="")
+        summary["next_to_teach"] = ""
+        return {
+            "current_topic": {},
+            "topic_complete": False,
+            "pending_action": "",
+            "lesson_complete": True,
+            "awaiting_reply": False,
+            "lesson_summary": summary,
+        }
+
+    current_topic = normalize_topic_entry(topics[current_index], index=current_index, lesson_name=state.get("lesson_name", ""))
+    return {
+        "current_topic": current_topic,
+        "topic_complete": bool(state.get("topic_complete")),
+        "pending_action": "",
+    }
+
+
+def teach(state: State):
     llm = get_llm(get_state_chat_model(state))
     if llm is None:
         raise ValueError(get_missing_chat_model_key_message(get_state_chat_model(state)))
 
-    if state.get("lesson_complete") or not get_current_chunk_text(state):
+    messages = ensure_message_ids(list(state.get("messages") or []), prefix="live")
+    tool_images = extract_selected_images_from_tool_messages(messages)
+    used_image_ids = merge_used_image_ids(state.get("used_image_ids"), tool_images)
+    topics = state.get("topics") or []
+    current_index = get_current_topic_index(state)
+
+    if state.get("lesson_complete") or current_index >= len(topics):
+        summary = sanitize_summary(state.get("lesson_summary"), fallback_next="")
+        summary["next_to_teach"] = ""
         return {
             "messages": [AIMessage(content=DONE_TOKEN)],
-            "awaiting_student_reply": False,
+            "used_image_ids": used_image_ids,
+            "topic_complete": True,
+            "pending_action": "",
             "lesson_complete": True,
+            "awaiting_reply": False,
+            "lesson_summary": summary,
         }
 
-    llm_with_tools = llm.bind_tools([fetch_relevant_lesson_images])
-    prompt_messages = prepare_prompt_messages(state)
+    if state.get("awaiting_reply") and latest_human_message(messages) is not None:
+        if state.get("topic_complete") and is_checkpoint_topic(state):
+            return {
+                "used_image_ids": used_image_ids,
+                "pending_action": "check_understanding",
+            }
+        if state.get("topic_complete"):
+            return {
+                "used_image_ids": used_image_ids,
+                "pending_action": "advance_topic",
+            }
+
+    teaching_plan = plan_next_teaching_step({**state, "messages": messages, "used_image_ids": used_image_ids})
+    llm_with_tools = llm.bind_tools([fetch_lesson_image])
+    prompt_messages = prepare_teach_messages(
+        {**state, "messages": messages, "used_image_ids": used_image_ids},
+        teaching_plan=teaching_plan,
+    )
     response = invoke_llm_with_logging(
         llm_with_tools,
         prompt_messages,
-        context="simple_graph.assistant",
+        context="simple_graph.teach",
         metadata={
             "chat_model": get_state_chat_model(state),
             "chapter_name": state.get("chapter_name"),
             "lesson_name": state.get("lesson_name"),
+            "topic_index": current_index,
         },
     )
-    return {"messages": [response]}
 
+    if getattr(response, "tool_calls", None):
+        return {
+            "messages": [response],
+            "used_image_ids": used_image_ids,
+            "pending_action": "",
+        }
 
-def route_after_assistant(state: State):
-    last_message = latest_ai_message(state.get("messages"))
-    if isinstance(last_message, AIMessage) and getattr(last_message, "tool_calls", None):
-        return "tools"
-    return "postprocess"
+    lesson_complete = is_done_response(response)
+    current_turns = get_current_topic_turns(state)
+    if not lesson_complete:
+        current_turns += 1
+    topic_complete = bool(teaching_plan.get("topic_complete_after_reply")) or (
+        not lesson_complete and current_turns >= MAX_TURNS_PER_TOPIC
+    )
+    pending_action = ""
+    if topic_complete and not is_checkpoint_topic(state) and current_index == len(topics) - 1:
+        pending_action = "advance_topic"
 
-
-def postprocess_turn(state: State):
-    all_messages = ensure_message_ids(list(state.get("messages") or []), prefix="live")
-    last_ai = latest_ai_message(all_messages)
-    lesson_complete = state.get("lesson_complete", False) or is_done_response(last_ai)
-    next_state = {**state, "messages": all_messages, "lesson_complete": lesson_complete}
+    next_state = {
+        **state,
+        "messages": [*messages, response],
+        "used_image_ids": used_image_ids,
+        "topic_complete": topic_complete,
+        "lesson_complete": lesson_complete,
+        "awaiting_reply": not lesson_complete,
+    }
     summary = update_running_summary(next_state)
-    current_chunk_turns = get_current_topic_turns(state)
-    if last_ai is not None and not lesson_complete:
-        current_chunk_turns += 1
-
-    kept_messages = ensure_message_ids(trim_message_history(all_messages), prefix="live")
-    removals = remove_trimmed_messages(all_messages, kept_messages)
 
     return {
-        "lesson_summary": summary,
+        "messages": [response],
+        "used_image_ids": used_image_ids,
+        "current_topic_turns": current_turns,
+        "topic_complete": topic_complete,
+        "pending_action": pending_action,
         "lesson_complete": lesson_complete,
-        "awaiting_student_reply": False if lesson_complete else True,
-        "current_topic_turns": current_chunk_turns,
-        "current_chunk_turns": current_chunk_turns,
-        "messages": removals,
+        "awaiting_reply": not lesson_complete,
+        "lesson_summary": summary,
+    }
+
+
+def route_after_teach(state: State):
+    messages = state.get("messages") or []
+    last_ai = latest_ai_message(messages)
+    if isinstance(last_ai, AIMessage) and getattr(last_ai, "tool_calls", None):
+        return "fetch_image"
+
+    pending_action = str(state.get("pending_action") or "").strip()
+    if pending_action in {"check_understanding", "advance_topic"}:
+        return pending_action
+
+    if state.get("lesson_complete") or is_done_response(last_ai):
+        return "end"
+    return "end"
+
+
+def check_understanding(state: State):
+    if not is_checkpoint_topic(state):
+        return {"pending_action": "", "awaiting_reply": False}
+
+    messages = ensure_message_ids(list(state.get("messages") or []), prefix="live")
+    last_user = latest_human_message(messages)
+    if last_user is None:
+        return {"pending_action": "", "awaiting_reply": True}
+
+    user_text = extract_text_content(last_user.content)
+    llm = get_llm(get_state_chat_model(state))
+    payload = call_llm_for_json(
+        llm=llm,
+        system_prompt=(
+            "You are checking whether a Bangladeshi HSC physics student understood the current topic.\n"
+            "Return only valid JSON with this schema:\n"
+            '{ "understood": bool, "follow_up": str | null }\n'
+            "Rules:\n"
+            "- understood is true only if the student's latest reply is conceptually good enough to advance.\n"
+            "- If understood is false, follow_up must contain a clearer re-explanation in simple Bangla-friendly language and then exactly one improved conceptual question.\n"
+            "- If understood is true, follow_up must be null.\n"
+            "- Use only the current topic content and the conversation.\n"
+            "- Never output markdown fences."
+        ),
+        user_prompt=(
+            f"Chapter: {state.get('chapter_name', '')}\n"
+            f"Lesson: {state.get('lesson_name', '')}\n"
+            f"Current topic:\n{json.dumps(get_current_topic(state), ensure_ascii=False)}\n\n"
+            f"Current topic turns: {get_current_topic_turns(state)} / {MAX_TURNS_PER_TOPIC}\n\n"
+            f"Recent conversation:\n{build_message_transcript(trim_message_history(messages, max_turns=2, max_chars=2200), include_tools=False)}\n\n"
+            f"Latest student reply:\n{user_text}"
+        ),
+    )
+
+    if not isinstance(payload, dict):
+        payload = {
+            "understood": should_advance_to_next_chunk(state),
+            "follow_up": None if should_advance_to_next_chunk(state) else build_understanding_follow_up(state),
+        }
+
+    understood = bool(payload.get("understood"))
+    forced_advance = get_current_topic_turns(state) >= MAX_TURNS_PER_TOPIC or should_advance_to_next_chunk(state)
+
+    if understood or forced_advance:
+        next_state = {
+            **state,
+            "messages": messages,
+            "topic_complete": True,
+            "awaiting_reply": False,
+        }
+        return {
+            "topic_complete": True,
+            "pending_action": "",
+            "awaiting_reply": False,
+            "lesson_summary": update_running_summary(next_state),
+        }
+
+    follow_up = str(payload.get("follow_up") or "").strip() or build_understanding_follow_up(state)
+    response = AIMessage(content=follow_up)
+    next_state = {
+        **state,
+        "messages": [*messages, response],
+        "awaiting_reply": True,
+    }
+
+    return {
+        "messages": [response],
+        "current_topic_turns": get_current_topic_turns(state) + 1,
+        "topic_complete": False,
+        "pending_action": "",
+        "awaiting_reply": True,
+        "lesson_summary": update_running_summary(next_state),
+    }
+
+
+def route_after_check_understanding(state: State):
+    if state.get("awaiting_reply"):
+        return "end"
+    return "advance_topic"
+
+
+def advance_topic(state: State):
+    if state.get("lesson_complete"):
+        return {}
+
+    topics = state.get("topics") or []
+    current_index = get_current_topic_index(state)
+    next_index = current_index + 1
+
+    if next_index >= len(topics):
+        summary = sanitize_summary(state.get("lesson_summary"), fallback_next="")
+        summary["next_to_teach"] = ""
+        return {
+            "current_topic_index": next_index,
+            "current_topic_turns": 0,
+            "current_topic": {},
+            "topic_complete": False,
+            "pending_action": "",
+            "lesson_complete": True,
+            "awaiting_reply": False,
+            "lesson_summary": summary,
+        }
+
+    next_topic = normalize_topic_entry(topics[next_index], index=next_index, lesson_name=state.get("lesson_name", ""))
+    summary = sanitize_summary(state.get("lesson_summary"), fallback_next=build_topic_preview(next_topic))
+    summary["next_to_teach"] = build_topic_preview(next_topic)
+
+    return {
+        "current_topic_index": next_index,
+        "current_topic_turns": 0,
+        "current_topic": next_topic,
+        "topic_complete": False,
+        "pending_action": "",
+        "awaiting_reply": False,
+        "lesson_summary": summary,
     }
 
 
 builder = StateGraph(State)
-builder.add_node("advance_turn", advance_turn)
-builder.add_node("assistant", assistant)
-builder.add_node("tools", ToolNode([fetch_relevant_lesson_images]))
-builder.add_node("postprocess", postprocess_turn)
-builder.add_edge(START, "advance_turn")
-builder.add_edge("advance_turn", "assistant")
+builder.add_node("select_topic", select_topic)
+builder.add_node("teach", teach)
+builder.add_node("fetch_image", ToolNode([fetch_lesson_image]))
+builder.add_node("check_understanding", check_understanding)
+builder.add_node("advance_topic", advance_topic)
+builder.add_edge(START, "select_topic")
+builder.add_edge("select_topic", "teach")
 builder.add_conditional_edges(
-    "assistant",
-    route_after_assistant,
+    "teach",
+    route_after_teach,
     {
-        "tools": "tools",
-        "postprocess": "postprocess",
+        "fetch_image": "fetch_image",
+        "check_understanding": "check_understanding",
+        "advance_topic": "advance_topic",
+        "end": END,
     },
 )
-builder.add_edge("tools", "assistant")
+builder.add_edge("fetch_image", "teach")
+builder.add_conditional_edges(
+    "check_understanding",
+    route_after_check_understanding,
+    {
+        "advance_topic": "advance_topic",
+        "end": END,
+    },
+)
+builder.add_edge("advance_topic", "select_topic")
 graph = builder.compile(checkpointer=memory)
 
 
@@ -2148,24 +2089,24 @@ def delete_chat_thread(thread_id):
 def thread_has_live_state(thread_id):
     snapshot = graph.get_state(get_thread_config(thread_id))
     values = snapshot.values or {}
-    return bool(values.get("lesson_chunks"))
+    return bool(values.get("topics"))
 
 
-def clamp_chunk_index(index, lesson_chunks):
-    if not lesson_chunks:
+def clamp_topic_index(index, topics):
+    if not topics:
         return 0
     try:
         parsed = int(index)
     except Exception:
         parsed = 0
-    return max(0, min(parsed, len(lesson_chunks)))
+    return max(0, min(parsed, len(topics)))
 
 
-def build_initial_state_from_snapshot(chapter_name, lesson_name, lesson_chunks, saved_thread_state, chat_model=None):
+def build_initial_state_from_snapshot(chapter_name, lesson_name, topics, saved_thread_state, chat_model=None):
     if not isinstance(saved_thread_state, dict):
         return None
 
-    expected_signature = compute_lesson_signature(lesson_chunks)
+    expected_signature = compute_lesson_signature(topics)
     if saved_thread_state.get("chapter_name") != chapter_name:
         return None
     if saved_thread_state.get("lesson_name") != lesson_name:
@@ -2174,31 +2115,25 @@ def build_initial_state_from_snapshot(chapter_name, lesson_name, lesson_chunks, 
         return None
 
     recent_messages = deserialize_messages(saved_thread_state.get("recent_messages"))
-    topic_plan = normalize_topic_plan(saved_thread_state.get("topic_plan"), lesson_chunks)
-    topic_image_map = normalize_topic_image_map(saved_thread_state.get("topic_image_map"))
-    if not topic_image_map:
-        topic_image_map = build_topic_image_map(
-            lesson_chunks,
-            load_images_from_database(chapter_name, lesson_name),
-        )
-    checkpoint_indexes = normalize_checkpoint_indexes(saved_thread_state.get("checkpoint_indexes"), len(topic_plan))
+    checkpoint_indexes = normalize_checkpoint_indexes(saved_thread_state.get("checkpoint_indexes"), len(topics))
     used_image_ids = normalize_used_image_ids(saved_thread_state.get("used_image_ids"))
-    current_index = clamp_chunk_index(
-        saved_thread_state.get("current_topic_index", saved_thread_state.get("current_chunk_index", 0)),
-        lesson_chunks,
-    )
+    current_index = clamp_topic_index(saved_thread_state.get("current_topic_index", 0), topics)
     lesson_complete = bool(saved_thread_state.get("lesson_complete"))
     if lesson_complete:
-        current_index = len(topic_plan)
+        current_index = len(topics)
+
+    current_topic = {}
+    if not lesson_complete and current_index < len(topics):
+        current_topic = normalize_topic_entry(topics[current_index], index=current_index, lesson_name=lesson_name)
 
     summary = sanitize_summary(saved_thread_state.get("lesson_summary"))
-    if not lesson_complete and current_index < len(topic_plan):
-        current_preview = topic_plan[current_index]
-        next_preview = topic_plan[current_index + 1] if current_index + 1 < len(topic_plan) else ""
+    if not lesson_complete and current_topic:
+        next_preview = build_topic_preview(topics[current_index + 1], limit=100) if current_index + 1 < len(topics) else ""
         summary["next_to_teach"] = summary.get("next_to_teach") or build_next_teaching_note(
-            current_preview,
+            build_topic_preview(current_topic, limit=100),
             next_preview,
-            waiting_for_student=bool(saved_thread_state.get("awaiting_student_reply")),
+            waiting_for_student=bool(saved_thread_state.get("awaiting_reply", saved_thread_state.get("awaiting_student_reply"))),
+            topic_complete=bool(saved_thread_state.get("topic_complete")),
         )
     else:
         summary["next_to_teach"] = ""
@@ -2209,23 +2144,22 @@ def build_initial_state_from_snapshot(chapter_name, lesson_name, lesson_chunks, 
         "chapter_name": chapter_name,
         "lesson_name": lesson_name,
         "chat_model": selected_chat_model,
-        "lesson_chunks": lesson_chunks,
-        "topic_plan": topic_plan,
-        "topic_image_map": topic_image_map,
-        "used_image_ids": used_image_ids,
-        "checkpoint_indexes": checkpoint_indexes,
+        "topics": topics,
         "current_topic_index": current_index,
-        "current_chunk_index": current_index,
         "current_topic_turns": int(saved_thread_state.get("current_topic_turns", saved_thread_state.get("current_chunk_turns", 0)) or 0),
-        "current_chunk_turns": int(saved_thread_state.get("current_topic_turns", saved_thread_state.get("current_chunk_turns", 0)) or 0),
+        "current_topic": current_topic,
+        "topic_complete": bool(saved_thread_state.get("topic_complete")),
+        "pending_action": "",
+        "checkpoint_indexes": checkpoint_indexes,
+        "used_image_ids": used_image_ids,
         "lesson_summary": summary,
-        "awaiting_student_reply": bool(saved_thread_state.get("awaiting_student_reply")),
+        "awaiting_reply": bool(saved_thread_state.get("awaiting_reply", saved_thread_state.get("awaiting_student_reply"))),
         "lesson_complete": lesson_complete,
         "messages": trim_message_history(recent_messages),
     }
 
 
-def build_initial_state_from_history(chapter_name, lesson_name, lesson_chunks, history, chat_model=None):
+def build_initial_state_from_history(chapter_name, lesson_name, topics, history, chat_model=None):
     selected_chat_model = resolve_chat_model_id(chat_model)
     llm = get_llm(selected_chat_model)
     history_messages = build_history_messages(history)
@@ -2233,47 +2167,45 @@ def build_initial_state_from_history(chapter_name, lesson_name, lesson_chunks, h
         llm=llm,
         chapter_name=chapter_name,
         lesson_name=lesson_name,
-        lesson_chunks=lesson_chunks,
+        topics=topics,
         history_messages=history_messages,
     )
 
     recent_messages = trim_message_history(history_messages)
-    topic_plan = build_topic_plan(lesson_chunks)
-    topic_image_map = build_topic_image_map(
-        lesson_chunks,
-        load_images_from_database(chapter_name, lesson_name),
-    )
-    used_image_ids = normalize_used_image_ids(collect_used_image_ids_from_history(history))
-    checkpoint_indexes = build_checkpoint_indexes(len(topic_plan))
+    checkpoint_indexes = build_checkpoint_indexes(len(topics))
+    awaiting_reply = bool(recent_messages) and not lesson_complete and isinstance(recent_messages[-1], AIMessage)
+    current_topic = {}
+    if not lesson_complete and current_index < len(topics):
+        current_topic = normalize_topic_entry(topics[current_index], index=current_index, lesson_name=lesson_name)
+
     return {
         "chapter_name": chapter_name,
         "lesson_name": lesson_name,
         "chat_model": selected_chat_model,
-        "lesson_chunks": lesson_chunks,
-        "topic_plan": topic_plan,
-        "topic_image_map": topic_image_map,
-        "used_image_ids": used_image_ids,
-        "checkpoint_indexes": checkpoint_indexes,
+        "topics": topics,
         "current_topic_index": current_index,
-        "current_chunk_index": current_index,
-        "current_topic_turns": 1 if recent_messages and not lesson_complete else 0,
-        "current_chunk_turns": 1 if recent_messages and not lesson_complete else 0,
+        "current_topic_turns": 1 if awaiting_reply else 0,
+        "current_topic": current_topic,
+        "topic_complete": False,
+        "pending_action": "",
+        "checkpoint_indexes": checkpoint_indexes,
+        "used_image_ids": normalize_used_image_ids(collect_used_image_ids_from_history(history)),
         "lesson_summary": summary,
-        "awaiting_student_reply": bool(recent_messages) and not lesson_complete,
+        "awaiting_reply": awaiting_reply,
         "lesson_complete": lesson_complete,
         "messages": recent_messages,
     }
 
 
-def ensure_initial_thread_state(chapter_name, lesson_name, lesson_text, history, saved_thread_state, chat_model=None):
-    lesson_chunks = chunk_lesson_text(lesson_text)
-    if not lesson_chunks:
-        raise ValueError("Lesson content is empty")
+def ensure_initial_thread_state(chapter_name, lesson_name, lesson_source, history, saved_thread_state, chat_model=None):
+    topics = normalize_lesson_topics(lesson_source, fallback_lesson_name=lesson_name)
+    if not topics:
+        raise ValueError("Lesson topics are empty")
 
     snapshot_state = build_initial_state_from_snapshot(
         chapter_name=chapter_name,
         lesson_name=lesson_name,
-        lesson_chunks=lesson_chunks,
+        topics=topics,
         saved_thread_state=saved_thread_state,
         chat_model=chat_model,
     )
@@ -2283,348 +2215,10 @@ def ensure_initial_thread_state(chapter_name, lesson_name, lesson_text, history,
     return build_initial_state_from_history(
         chapter_name=chapter_name,
         lesson_name=lesson_name,
-        lesson_chunks=lesson_chunks,
+        topics=topics,
         history=history,
         chat_model=chat_model,
     )
-
-
-def extract_selected_images_from_tool_messages(messages):
-    selected_images = []
-    seen_ids = set()
-
-    for message in messages or []:
-        if not isinstance(message, ToolMessage):
-            continue
-        if getattr(message, "name", "") != IMAGE_TOOL_NAME:
-            continue
-
-        payload = parse_json_from_text(extract_text_content(message.content))
-        if not isinstance(payload, dict):
-            continue
-
-        for item in payload.get("selected_images") or []:
-            if not isinstance(item, dict):
-                continue
-            image_id = str(item.get("image_id") or "").strip()
-            if not image_id or image_id in seen_ids:
-                continue
-            seen_ids.add(image_id)
-            selected_images.append(
-                {
-                    "image_id": image_id,
-                    "description": str(item.get("description") or "").strip(),
-                    "topics": normalize_topics(item.get("topics")),
-                }
-            )
-
-    return selected_images
-
-
-def merge_selected_images(*groups, max_images=AUTO_IMAGE_MAX):
-    merged = []
-    seen_ids = set()
-
-    for group in groups:
-        for item in group or []:
-            if not isinstance(item, dict):
-                continue
-            image_id = str(item.get("image_id") or "").strip()
-            if not image_id or image_id in seen_ids:
-                continue
-            seen_ids.add(image_id)
-            merged.append(
-                {
-                    "image_id": image_id,
-                    "description": str(item.get("description") or "").strip(),
-                    "topics": normalize_topics(item.get("topics")),
-                }
-            )
-            if len(merged) >= max_images:
-                return merged
-
-    return merged
-
-
-def build_image_candidates_for_reply(
-    chapter_name,
-    lesson_name,
-    response_text,
-    user_text,
-    current_chunk,
-    topic_image_map=None,
-    current_chunk_index=0,
-    used_image_ids=None,
-    tool_selected_images=None,
-):
-    images = load_images_from_database(chapter_name, lesson_name)
-    if not images:
-        return []
-
-    used_image_ids = {str(item).strip() for item in used_image_ids or [] if str(item).strip()}
-    normalized_topic_image_map = normalize_topic_image_map(topic_image_map)
-    planned_images = normalized_topic_image_map.get(str(int(current_chunk_index or 0)), [])
-    available_images = [image for image in images if image.get("image_id") not in used_image_ids]
-    unused_tool_images = filter_selected_images_by_ids(tool_selected_images, used_image_ids)
-    primary_query = "\n".join(part for part in [response_text, user_text] if part).strip()
-    fallback_query = "\n".join(part for part in [response_text, user_text, current_chunk] if part).strip()
-    planned_matches = filter_selected_images_by_ids(planned_images, used_image_ids)
-    primary_matches = []
-    fallback_matches = []
-
-    if primary_query and available_images:
-        primary_matches = [
-            compact_image_metadata(image)
-            for image in select_relevant_images(primary_query, available_images, IMAGE_CANDIDATE_MAX)
-        ]
-
-    if fallback_query and available_images:
-        fallback_matches = [
-            compact_image_metadata(image)
-            for image in select_relevant_images(fallback_query, available_images, IMAGE_CANDIDATE_MAX)
-        ]
-
-    if not planned_matches and not primary_matches and not fallback_matches:
-        if chunk_needs_visual_support(current_chunk) or query_requests_visual(primary_query) or query_requests_visual(fallback_query):
-            fallback_matches = [compact_image_metadata(image) for image in available_images[:AUTO_IMAGE_MAX]]
-
-    return merge_selected_images(
-        planned_matches,
-        unused_tool_images,
-        primary_matches,
-        fallback_matches,
-        max_images=IMAGE_CANDIDATE_MAX,
-    )
-
-
-def should_auto_attach_images(current_chunk, user_text, candidate_images):
-    if not candidate_images:
-        return False
-
-    if query_requests_visual(user_text):
-        return True
-    if chunk_needs_visual_support(current_chunk):
-        return True
-
-    top_candidate = candidate_images[0] if isinstance(candidate_images[0], dict) else {}
-    return bool(normalize_topics(top_candidate.get("topics")))
-
-
-def fallback_inline_image_description(raw_description):
-    text = re.sub(r"\s+", " ", str(raw_description or "").strip())
-    if not text:
-        return ""
-
-    replacements = [
-        (r"\bq1\b", "$q_1$"),
-        (r"\bq2\b", "$q_2$"),
-        (r"\bq3\b", "$q_3$"),
-        (r"\bF\b", "$F$"),
-        (r"\bE\b", "$E$"),
-        (r"\bV\b", "$V$"),
-        (r"\bI\b", "$I$"),
-        (r"\br\b", "$r$"),
-        (r"\bR\b", "$R$"),
-        (r"\btheta\b", "$\\theta$"),
-        (r"\balpha\b", "$\\alpha$"),
-        (r"\bbeta\b", "$\\beta$"),
-        (r"\bgamma\b", "$\\gamma$"),
-    ]
-
-    for pattern, replacement in replacements:
-        text = re.sub(pattern, replacement, text)
-
-    return text[:220].strip()
-
-
-def manual_rewrite_image_description(raw_description):
-    text = fallback_inline_image_description(raw_description)
-    if not text:
-        return ""
-
-    normalized = normalize_text(text)
-    if normalized.startswith("এই ছবিতে") or normalized.startswith("এখানে"):
-        return text
-
-    trimmed = text.rstrip(" .।")
-    return f"এই ছবিতে {trimmed} দেখানো হয়েছে।"
-
-
-def rewrite_image_descriptions_for_display(llm, chapter_name, lesson_name, response_text, current_chunk, selected_images):
-    if not selected_images:
-        return {}
-
-    payload = call_llm_for_json(
-        llm=llm,
-        system_prompt=(
-            "Rewrite lesson image captions for direct student display.\n"
-            "Return only valid JSON with this shape:\n"
-            '{"images":[{"image_id":"string","description":"string"}]}\n'
-            "Rules:\n"
-            "- Keep each description short: maximum 2 small sentences.\n"
-            "- Use very simple Bangla-friendly wording.\n"
-            "- Rewrite the raw description in your own words so it matches the tutor reply. Do not copy the raw description verbatim.\n"
-            "- Use LaTeX for symbols and notations when useful, for example $q_1$, $q_2$, $F$, $\\theta$.\n"
-            "- Do not mention topics, metadata, or internal ids in the description.\n"
-            "- Do not invent details that are not supported by the lesson chunk or the raw image description.\n"
-            "- Output descriptions only, no markdown image tags."
-        ),
-        user_prompt=(
-            f"Chapter: {chapter_name}\n"
-            f"Lesson: {lesson_name}\n\n"
-            f"Tutor response:\n{response_text}\n\n"
-            f"Current lesson chunk:\n{current_chunk}\n\n"
-            f"Images to rewrite:\n{json.dumps(selected_images, ensure_ascii=False)}"
-        ),
-    )
-
-    rewritten = {}
-    if isinstance(payload, dict):
-        for item in payload.get("images") or []:
-            if not isinstance(item, dict):
-                continue
-            image_id = str(item.get("image_id") or "").strip()
-            description = str(item.get("description") or "").strip()
-            if image_id and description:
-                rewritten[image_id] = description[:260].strip()
-
-    return rewritten
-
-
-def enhance_response_with_lesson_images(
-    llm,
-    chapter_name,
-    lesson_name,
-    user_text,
-    response_text,
-    current_chunk,
-    candidate_images,
-):
-    if str(response_text or "").strip().upper() == DONE_TOKEN or not candidate_images:
-        return {
-            "response": response_text,
-            "selected_images": [],
-        }
-
-    payload = call_llm_for_json(
-        llm=llm,
-        system_prompt=(
-            "You are improving a tutor reply after checking lesson images from the database.\n"
-            "Return only valid JSON with this shape:\n"
-            '{"response":"string","selected_images":[{"image_id":"string","description":"string"}]}\n'
-            "Rules:\n"
-            "- The candidate images are already preselected for the current topic. Prefer them when they fit.\n"
-            "- Select up to 2 images only if they genuinely help explain the current reply.\n"
-            "- If no image helps, return selected_images as [].\n"
-            "- If you select images, revise the response so it naturally references the visual, for example by saying to look at the figure below.\n"
-            "- Keep the same simple Bangla-friendly tutoring style.\n"
-            "- Stay strictly inside the original lesson chunk and original reply scope.\n"
-            "- Do not add new concepts.\n"
-            "- Each selected image description must be short, student-facing, and may use LaTeX notation like $q_1$, $F$, $\\theta$ when useful.\n"
-            "- Do not mention image ids, topics, URLs, or database details.\n"
-            "- The revised response should remain concise."
-        ),
-        user_prompt=(
-            f"Chapter: {chapter_name}\n"
-            f"Lesson: {lesson_name}\n\n"
-            f"Student message:\n{user_text}\n\n"
-            f"Current lesson chunk:\n{current_chunk}\n\n"
-            f"Original tutor reply:\n{response_text}\n\n"
-            f"Candidate lesson images:\n{json.dumps(candidate_images, ensure_ascii=False)}"
-        ),
-    )
-
-    if not isinstance(payload, dict):
-        return {
-            "response": response_text,
-            "selected_images": [],
-        }
-
-    revised_response = str(payload.get("response") or "").strip() or response_text
-    selected_images = []
-    seen_ids = set()
-
-    for item in payload.get("selected_images") or []:
-        if not isinstance(item, dict):
-            continue
-        image_id = str(item.get("image_id") or "").strip()
-        if not image_id or image_id in seen_ids:
-            continue
-        seen_ids.add(image_id)
-        selected_images.append(
-            {
-                "image_id": image_id,
-                "description": str(item.get("description") or "").strip(),
-                "topics": [],
-            }
-        )
-        if len(selected_images) >= AUTO_IMAGE_MAX:
-            break
-
-    return {
-        "response": revised_response,
-        "selected_images": selected_images,
-    }
-
-
-def resolve_images_for_response(
-    chapter_name,
-    lesson_name,
-    selected_images,
-    response_text="",
-    current_chunk="",
-    chat_model=None,
-):
-    if not selected_images:
-        return []
-
-    catalog = {
-        image["image_id"]: image
-        for image in load_images_from_database(chapter_name, lesson_name)
-    }
-    llm = get_llm(chat_model)
-    rewritten_descriptions = rewrite_image_descriptions_for_display(
-        llm=llm,
-        chapter_name=chapter_name,
-        lesson_name=lesson_name,
-        response_text=response_text,
-        current_chunk=current_chunk,
-        selected_images=selected_images,
-    )
-
-    resolved = []
-    for item in selected_images:
-        image_id = str(item.get("image_id") or "").strip()
-        catalog_item = catalog.get(image_id)
-        if not catalog_item:
-            continue
-
-        raw_catalog_description = str(catalog_item.get("description") or "").strip()
-        preferred_description = str(item.get("description") or "").strip()
-        rewritten_description = str(rewritten_descriptions.get(image_id) or "").strip()
-
-        if rewritten_description and normalize_text(rewritten_description) == normalize_text(raw_catalog_description):
-            rewritten_description = ""
-
-        if preferred_description and normalize_text(preferred_description) == normalize_text(raw_catalog_description):
-            preferred_description = ""
-
-        display_description = (
-            rewritten_description
-            or preferred_description
-            or manual_rewrite_image_description(raw_catalog_description)
-            or fallback_inline_image_description(raw_catalog_description)
-        )
-        resolved.append(
-            {
-                "image_id": image_id,
-                "imageURL": catalog_item["imageURL"],
-                "description": display_description,
-                "topic": [],
-            }
-        )
-
-    return resolved
 
 
 def extract_turn_messages(all_messages, user_message_id):
@@ -2634,26 +2228,39 @@ def extract_turn_messages(all_messages, user_message_id):
     return latest_turn_messages(all_messages)
 
 
+def collect_turn_response_text(turn_messages):
+    texts = []
+    for message in turn_messages or []:
+        if not isinstance(message, AIMessage):
+            continue
+        text = extract_text_content(message.content).strip()
+        if text:
+            texts.append(text)
+
+    if not texts:
+        return ""
+
+    non_done = [text for text in texts if text.upper() != DONE_TOKEN]
+    if non_done:
+        return "\n\n".join(non_done).strip()
+    return texts[-1]
+
+
 def export_thread_state_snapshot(state):
     messages = ensure_message_ids(list(state.get("messages") or []), prefix="snap")
-    lesson_chunks = state.get("lesson_chunks") or []
-    current_topic_index = get_current_topic_index(state)
-    current_topic_turns = get_current_topic_turns(state)
+    topics = state.get("topics") or []
     return {
         "chapter_name": state.get("chapter_name", ""),
         "lesson_name": state.get("lesson_name", ""),
-        "lesson_signature": compute_lesson_signature(lesson_chunks),
+        "lesson_signature": compute_lesson_signature(topics),
         "chat_model": get_state_chat_model(state),
-        "current_topic_index": current_topic_index,
-        "current_chunk_index": current_topic_index,
-        "current_topic_turns": current_topic_turns,
-        "current_chunk_turns": current_topic_turns,
-        "topic_plan": get_topic_plan(state),
-        "topic_image_map": normalize_topic_image_map(state.get("topic_image_map")),
+        "current_topic_index": get_current_topic_index(state),
+        "current_topic_turns": get_current_topic_turns(state),
+        "topic_complete": bool(state.get("topic_complete")),
         "used_image_ids": normalize_used_image_ids(state.get("used_image_ids")),
         "checkpoint_indexes": get_checkpoint_indexes(state),
         "lesson_summary": sanitize_summary(state.get("lesson_summary")),
-        "awaiting_student_reply": bool(state.get("awaiting_student_reply")),
+        "awaiting_reply": bool(state.get("awaiting_reply")),
         "lesson_complete": bool(state.get("lesson_complete")),
         "recent_messages": serialize_messages(messages),
     }
@@ -2680,7 +2287,7 @@ def run_stateful_chat(
     thread_id,
     chapter_name,
     lesson_name,
-    lesson_text,
+    lesson_source,
     history,
     user_text,
     saved_thread_state=None,
@@ -2700,7 +2307,7 @@ def run_stateful_chat(
         invoke_payload = ensure_initial_thread_state(
             chapter_name=chapter_name,
             lesson_name=lesson_name,
-            lesson_text=lesson_text,
+            lesson_source=lesson_source,
             history=history,
             saved_thread_state=saved_thread_state,
             chat_model=selected_chat_model,
@@ -2711,69 +2318,23 @@ def run_stateful_chat(
         state = graph.invoke(invoke_payload, config=config)
     except Exception as exc:
         raise ValueError(f"Chat generation failed: {exc}") from exc
+
     state = {**state, "chat_model": selected_chat_model}
-
     turn_messages = extract_turn_messages(state.get("messages") or [], user_message.id)
-    last_ai = latest_ai_message(turn_messages) or latest_ai_message(state.get("messages"))
-    response_text = extract_text_content(getattr(last_ai, "content", ""))
-    response_text = ensure_topic_transition(response_text, state)
-    current_chunk = get_current_chunk_text(state)
-    current_chunk_index = get_current_topic_index(state)
-    used_image_ids = normalize_used_image_ids(
-        merge_used_image_ids(
-            state.get("used_image_ids"),
-            [{"image_id": image_id} for image_id in collect_used_image_ids_from_history(history)],
-        )
-    )
-
-    tool_selected_images = filter_selected_images_by_ids(
-        extract_selected_images_from_tool_messages(turn_messages),
-        used_image_ids,
-    )
-    candidate_images = build_image_candidates_for_reply(
-        chapter_name=chapter_name,
-        lesson_name=lesson_name,
-        response_text=response_text,
-        user_text=user_text,
-        current_chunk=current_chunk,
-        topic_image_map=state.get("topic_image_map"),
-        current_chunk_index=current_chunk_index,
-        used_image_ids=used_image_ids,
-        tool_selected_images=tool_selected_images,
-    )
-
-    enhanced = enhance_response_with_lesson_images(
-        llm=llm,
-        chapter_name=chapter_name,
-        lesson_name=lesson_name,
-        user_text=user_text,
-        response_text=response_text,
-        current_chunk=current_chunk,
-        candidate_images=candidate_images,
-    )
-
-    response_text = str(enhanced.get("response") or "").strip() or response_text
-    response_text = ensure_topic_transition(response_text, state)
-    selected_images = enhanced.get("selected_images") or []
-    if not selected_images:
-        selected_images = tool_selected_images
-    if not selected_images and should_auto_attach_images(current_chunk, user_text, candidate_images):
-        selected_images = candidate_images[:AUTO_IMAGE_MAX]
-        normalized_response = normalize_text(response_text)
-        if response_text and "ছবি" not in normalized_response and "চিত্র" not in normalized_response:
-            response_text = f"{response_text}\n\nনিচের ছবিটি দেখো, এতে এই অংশটা আরও পরিষ্কার হবে।"
+    response_text = collect_turn_response_text(turn_messages)
+    current_topic = get_current_topic(state)
 
     response_images = resolve_images_for_response(
         chapter_name=chapter_name,
         lesson_name=lesson_name,
-        selected_images=selected_images,
+        selected_images=extract_selected_images_from_tool_messages(turn_messages),
         response_text=response_text,
-        current_chunk=current_chunk,
+        current_topic=current_topic,
         chat_model=selected_chat_model,
     )
     updated_state = {
         **state,
-        "used_image_ids": merge_used_image_ids(used_image_ids, response_images),
+        "used_image_ids": merge_used_image_ids(state.get("used_image_ids"), response_images),
     }
 
     citations = build_stateful_citations(
@@ -2872,7 +2433,7 @@ def run_chat(
         thread_id=thread_id,
         chapter_name=chapter_name,
         lesson_name=lesson_name,
-        lesson_text=lesson_source,
+        lesson_source=lesson_source,
         history=history,
         user_text=user_text,
         saved_thread_state=saved_thread_state,

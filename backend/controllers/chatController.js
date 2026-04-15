@@ -126,6 +126,7 @@ export const chat = async (req, res) => {
   const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
   const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
   const historyMode = req.body?.historyMode === 'assistant_only' ? 'assistant_only' : 'default';
+  const chatModel = typeof req.body?.chatModel === 'string' ? req.body.chatModel.trim() : '';
   const requestStartedAt = Date.now();
 
   console.log(`[chat] backend start user=${userId} chapter=${chapterName} lesson=${lessonName}`);
@@ -142,16 +143,21 @@ export const chat = async (req, res) => {
     const upstreamStartedAt = Date.now();
     console.log(`[chat] backend -> fastapi start user=${userId} lesson=${lessonName}`);
 
+    const upstreamPayload = {
+      message,
+      user_id: userId,
+      chapter_name: chapterName,
+      lesson_name: lessonName,
+      history_mode: historyMode,
+    };
+    if (chatModel) {
+      upstreamPayload.chat_model = chatModel;
+    }
+
     const upstream = await fetch(FASTAPI_CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        user_id: userId,
-        chapter_name: chapterName,
-        lesson_name: lessonName,
-        history_mode: historyMode,
-      }),
+      body: JSON.stringify(upstreamPayload),
       signal: controller.signal,
     });
 

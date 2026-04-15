@@ -78,6 +78,7 @@ class ChatThreadRequest(BaseModel):
 
 
 class ChatImage(BaseModel):
+    image_id: str = ""
     imageURL: str
     description: str = ""
     topic: list[str] = Field(default_factory=list)
@@ -196,7 +197,7 @@ async def chat(payload: ChatRequest):
     saved_thread_state = chat_record["thread_state"]
     history_lookup_ms = (perf_counter() - stage_started) * 1000
 
-    lesson_text = str(lesson.get("content") or "").strip()
+    lesson_text = extract_lesson_content_text(lesson)
     if not lesson_text:
         raise HTTPException(status_code=404, detail="Lesson content not found")
     lesson_label = get_lesson_label(lesson, payload.lesson_name)
@@ -212,7 +213,7 @@ async def chat(payload: ChatRequest):
             thread_id=thread_id,
             chapter_name=payload.chapter_name,
             lesson_name=lesson_label,
-            lesson_source=lesson_text,
+            lesson_source=lesson,
             history=history,
             user_text=payload.message,
             saved_thread_state=saved_thread_state,
@@ -350,6 +351,28 @@ def normalize_title(value):
     return str(value or "").strip().lower()
 
 
+def extract_lesson_content_text(lesson):
+    if not isinstance(lesson, dict):
+        return ""
+
+    content = str(lesson.get("content") or lesson.get("lesson_text") or lesson.get("text") or "").strip()
+    if content:
+        return content
+
+    parts = []
+    for topic in lesson.get("topics") or []:
+        if not isinstance(topic, dict):
+            continue
+        title = str(topic.get("title") or topic.get("topic_title") or topic.get("name") or "").strip()
+        topic_content = str(topic.get("content") or topic.get("text") or "").strip()
+        if title:
+            parts.append(title)
+        if topic_content:
+            parts.append(topic_content)
+
+    return "\n\n".join(parts).strip()
+
+
 @lru_cache(maxsize=1)
 def get_main_items():
     doc = db[MAIN_COLLECTION].find_one({"_id": MAIN_DOC_ID}) or {}
@@ -475,7 +498,7 @@ def get_lesson_label(lesson, fallback):
 
 
 def build_chat_lesson_entry(chapter_name, lesson, fallback):
-    content = str(lesson.get("content") or "").strip()
+    content = extract_lesson_content_text(lesson)
     if not content:
         return None
 
@@ -554,7 +577,7 @@ def load_selected_lessons(selections):
                 missing_entries.append(f"Topic not found: {chapter_name} / {topic_name}")
                 continue
 
-            content = str(lesson.get("content") or "").strip()
+            content = extract_lesson_content_text(lesson)
             if not content:
                 missing_entries.append(f"Topic content not found: {chapter_name} / {topic_name}")
                 continue
