@@ -6,6 +6,8 @@ import uuid
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 
+from graph.llm_logging import invoke_llm_with_logging
+
 
 EXAM_SYSTEM_PROMPT = (
     "You generate multiple-choice exams for Bangladeshi HSC Physics students.\n"
@@ -280,12 +282,19 @@ def generate_exam(selected_lessons, question_count):
             previous_error=last_error,
             previous_output=previous_output,
         )
+        messages = [
+            SystemMessage(content=EXAM_SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
         try:
-            response = llm.invoke(
-                [
-                    SystemMessage(content=EXAM_SYSTEM_PROMPT),
-                    HumanMessage(content=prompt),
-                ]
+            response = invoke_llm_with_logging(
+                llm,
+                messages,
+                context="exam_generator.generate_exam",
+                metadata={
+                    "question_count": question_count,
+                    "attempt": 2 if last_error else 1,
+                },
             )
         except Exception as exc:
             raise ValueError(normalize_error_message(exc)) from exc

@@ -117,6 +117,7 @@ from graph.lesson_grounding import (
     retrieve_relevant_lesson_chunks,
     truncate_text,
 )
+from graph.llm_logging import invoke_llm_with_logging
 
 
 memory = MemorySaver()
@@ -299,6 +300,7 @@ class ThreadStateSnapshot(TypedDict, total=False):
     chapter_name: str
     lesson_name: str
     lesson_signature: str
+    chat_model: str
     current_chunk_index: int
     current_topic_index: int
     lesson_summary: LessonSummary
@@ -317,6 +319,7 @@ class State(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     chapter_name: str
     lesson_name: str
+    chat_model: str
     lesson_chunks: list[str]
     current_chunk_index: int
     current_chunk_turns: int
@@ -336,6 +339,14 @@ def configure_image_loader(loader):
     lesson_image_loader = loader
 
 
+DEFAULT_CHAT_MODEL = "groq:openai/gpt-oss-120b"
+DEFAULT_CHAT_MODEL_CONFIG = {
+    "id": DEFAULT_CHAT_MODEL,
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+}
+
+
 def repair_invalid_json_backslashes(value):
     text = str(value or "")
     text = LATEX_COMMAND_BACKSLASH_PATTERN.sub(r"\\\\", text)
@@ -352,11 +363,66 @@ def normalize_grounded_text(value):
     return text.strip()
 
 
-def get_llm():
+def parse_chat_model_config(selected_model=None):
+    requested = str(selected_model or "").strip()
+    if not requested:
+        return dict(DEFAULT_CHAT_MODEL_CONFIG)
+
+    provider = ""
+    model = ""
+    if ":" in requested:
+        provider, model = requested.split(":", 1)
+        provider = provider.strip().lower()
+        model = model.strip()
+
+    if provider in {"openai", "groq"} and model:
+        return {
+            "id": f"{provider}:{model}",
+            "provider": provider,
+            "model": model,
+        }
+
+    return dict(DEFAULT_CHAT_MODEL_CONFIG)
+
+
+def resolve_chat_model_id(selected_model=None):
+    return parse_chat_model_config(selected_model)["id"]
+
+
+def resolve_chat_model_config(selected_model=None):
+    return parse_chat_model_config(selected_model)
+
+
+def get_state_chat_model(state):
+    return resolve_chat_model_id((state or {}).get("chat_model"))
+
+
+def get_missing_chat_model_key_message(selected_model=None):
+    provider = resolve_chat_model_config(selected_model)["provider"]
+    if provider == "openai":
+        return "OPENAI_API_KEY is not set"
+    return "GROQ_API_KEY is not set"
+
+
+def get_llm(selected_model=None):
+    model_config = resolve_chat_model_config(selected_model)
+
+    if model_config["provider"] == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            from langchain_openai import ChatOpenAI
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise ValueError("langchain-openai is not installed") from exc
+
+        return ChatOpenAI(model=model_config["model"], api_key=api_key, temperature=0)
+
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
-    return ChatGroq(model="openai/gpt-oss-120b", api_key=api_key, temperature=0)
+    return ChatGroq(model=model_config["model"], api_key=api_key, temperature=0)
 
 
 def extract_text_content(content):
@@ -1470,12 +1536,15 @@ def call_llm_for_json(llm, system_prompt, user_prompt):
     if llm is None:
         return None
 
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
+    ]
     try:
-        response = llm.invoke(
-            [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt),
-            ]
+        response = invoke_llm_with_logging(
+            llm,
+            messages,
+            context="simple_graph.call_llm_for_json",
         )
     except Exception:
         return None
@@ -1728,7 +1797,7 @@ def should_move_forward_after_checkpoint(state, user_text):
     if contains_any_hint(user_text, UNDERSTOOD_HINTS) and len(normalized) > 12:
         return True
     if len(tokenize(user_text)) >= 4:
-        return should_advance_chunk_with_llm(get_llm(), state, user_text)
+        return should_advance_chunk_with_llm(get_llm(get_state_chat_model(state)), state, user_text)
 
     return False
 
@@ -1900,7 +1969,7 @@ def fallback_summary_update(state):
 
 
 def update_running_summary(state):
-    llm = get_llm()
+    llm = get_llm(get_state_chat_model(state))
     current_chunk = get_current_chunk_text(state)
     current_preview = make_chunk_preview(current_chunk, limit=100)
     topic_plan = get_topic_plan(state)
@@ -1989,9 +2058,9 @@ def advance_turn(state: State):
 
 
 def assistant(state: State):
-    llm = get_llm()
+    llm = get_llm(get_state_chat_model(state))
     if llm is None:
-        raise ValueError("GROQ_API_KEY is not set")
+        raise ValueError(get_missing_chat_model_key_message(get_state_chat_model(state)))
 
     if state.get("lesson_complete") or not get_current_chunk_text(state):
         return {
@@ -2002,7 +2071,16 @@ def assistant(state: State):
 
     llm_with_tools = llm.bind_tools([fetch_relevant_lesson_images])
     prompt_messages = prepare_prompt_messages(state)
-    response = llm_with_tools.invoke(prompt_messages)
+    response = invoke_llm_with_logging(
+        llm_with_tools,
+        prompt_messages,
+        context="simple_graph.assistant",
+        metadata={
+            "chat_model": get_state_chat_model(state),
+            "chapter_name": state.get("chapter_name"),
+            "lesson_name": state.get("lesson_name"),
+        },
+    )
     return {"messages": [response]}
 
 
@@ -2083,7 +2161,7 @@ def clamp_chunk_index(index, lesson_chunks):
     return max(0, min(parsed, len(lesson_chunks)))
 
 
-def build_initial_state_from_snapshot(chapter_name, lesson_name, lesson_chunks, saved_thread_state):
+def build_initial_state_from_snapshot(chapter_name, lesson_name, lesson_chunks, saved_thread_state, chat_model=None):
     if not isinstance(saved_thread_state, dict):
         return None
 
@@ -2125,9 +2203,12 @@ def build_initial_state_from_snapshot(chapter_name, lesson_name, lesson_chunks, 
     else:
         summary["next_to_teach"] = ""
 
+    selected_chat_model = resolve_chat_model_id(chat_model or saved_thread_state.get("chat_model"))
+
     return {
         "chapter_name": chapter_name,
         "lesson_name": lesson_name,
+        "chat_model": selected_chat_model,
         "lesson_chunks": lesson_chunks,
         "topic_plan": topic_plan,
         "topic_image_map": topic_image_map,
@@ -2144,8 +2225,9 @@ def build_initial_state_from_snapshot(chapter_name, lesson_name, lesson_chunks, 
     }
 
 
-def build_initial_state_from_history(chapter_name, lesson_name, lesson_chunks, history):
-    llm = get_llm()
+def build_initial_state_from_history(chapter_name, lesson_name, lesson_chunks, history, chat_model=None):
+    selected_chat_model = resolve_chat_model_id(chat_model)
+    llm = get_llm(selected_chat_model)
     history_messages = build_history_messages(history)
     summary, current_index, lesson_complete = build_initial_thread_summary(
         llm=llm,
@@ -2166,6 +2248,7 @@ def build_initial_state_from_history(chapter_name, lesson_name, lesson_chunks, h
     return {
         "chapter_name": chapter_name,
         "lesson_name": lesson_name,
+        "chat_model": selected_chat_model,
         "lesson_chunks": lesson_chunks,
         "topic_plan": topic_plan,
         "topic_image_map": topic_image_map,
@@ -2182,7 +2265,7 @@ def build_initial_state_from_history(chapter_name, lesson_name, lesson_chunks, h
     }
 
 
-def ensure_initial_thread_state(chapter_name, lesson_name, lesson_text, history, saved_thread_state):
+def ensure_initial_thread_state(chapter_name, lesson_name, lesson_text, history, saved_thread_state, chat_model=None):
     lesson_chunks = chunk_lesson_text(lesson_text)
     if not lesson_chunks:
         raise ValueError("Lesson content is empty")
@@ -2192,6 +2275,7 @@ def ensure_initial_thread_state(chapter_name, lesson_name, lesson_text, history,
         lesson_name=lesson_name,
         lesson_chunks=lesson_chunks,
         saved_thread_state=saved_thread_state,
+        chat_model=chat_model,
     )
     if snapshot_state is not None:
         return snapshot_state
@@ -2201,6 +2285,7 @@ def ensure_initial_thread_state(chapter_name, lesson_name, lesson_text, history,
         lesson_name=lesson_name,
         lesson_chunks=lesson_chunks,
         history=history,
+        chat_model=chat_model,
     )
 
 
@@ -2280,16 +2365,12 @@ def build_image_candidates_for_reply(
     normalized_topic_image_map = normalize_topic_image_map(topic_image_map)
     planned_images = normalized_topic_image_map.get(str(int(current_chunk_index or 0)), [])
     available_images = [image for image in images if image.get("image_id") not in used_image_ids]
-    recycled_images = [image for image in images if image.get("image_id") in used_image_ids]
     unused_tool_images = filter_selected_images_by_ids(tool_selected_images, used_image_ids)
-
     primary_query = "\n".join(part for part in [response_text, user_text] if part).strip()
     fallback_query = "\n".join(part for part in [response_text, user_text, current_chunk] if part).strip()
-
     planned_matches = filter_selected_images_by_ids(planned_images, used_image_ids)
     primary_matches = []
     fallback_matches = []
-    recycled_matches = []
 
     if primary_query and available_images:
         primary_matches = [
@@ -2307,18 +2388,11 @@ def build_image_candidates_for_reply(
         if chunk_needs_visual_support(current_chunk) or query_requests_visual(primary_query) or query_requests_visual(fallback_query):
             fallback_matches = [compact_image_metadata(image) for image in available_images[:AUTO_IMAGE_MAX]]
 
-    if not available_images and recycled_images:
-        recycled_matches = [
-            compact_image_metadata(image)
-            for image in select_relevant_images(fallback_query or primary_query or current_chunk, recycled_images, AUTO_IMAGE_MAX)
-        ]
-
     return merge_selected_images(
         planned_matches,
         unused_tool_images,
         primary_matches,
         fallback_matches,
-        recycled_matches,
         max_images=IMAGE_CANDIDATE_MAX,
     )
 
@@ -2493,7 +2567,14 @@ def enhance_response_with_lesson_images(
     }
 
 
-def resolve_images_for_response(chapter_name, lesson_name, selected_images, response_text="", current_chunk=""):
+def resolve_images_for_response(
+    chapter_name,
+    lesson_name,
+    selected_images,
+    response_text="",
+    current_chunk="",
+    chat_model=None,
+):
     if not selected_images:
         return []
 
@@ -2501,7 +2582,7 @@ def resolve_images_for_response(chapter_name, lesson_name, selected_images, resp
         image["image_id"]: image
         for image in load_images_from_database(chapter_name, lesson_name)
     }
-    llm = get_llm()
+    llm = get_llm(chat_model)
     rewritten_descriptions = rewrite_image_descriptions_for_display(
         llm=llm,
         chapter_name=chapter_name,
@@ -2562,6 +2643,7 @@ def export_thread_state_snapshot(state):
         "chapter_name": state.get("chapter_name", ""),
         "lesson_name": state.get("lesson_name", ""),
         "lesson_signature": compute_lesson_signature(lesson_chunks),
+        "chat_model": get_state_chat_model(state),
         "current_topic_index": current_topic_index,
         "current_chunk_index": current_topic_index,
         "current_topic_turns": current_topic_turns,
@@ -2603,15 +2685,17 @@ def run_stateful_chat(
     user_text,
     saved_thread_state=None,
     lesson_catalog=None,
+    chat_model=None,
 ):
-    llm = get_llm()
+    selected_chat_model = resolve_chat_model_id(chat_model)
+    llm = get_llm(selected_chat_model)
     if llm is None:
-        raise ValueError("GROQ_API_KEY is not set")
+        raise ValueError(get_missing_chat_model_key_message(selected_chat_model))
 
     config = get_thread_config(thread_id)
     user_message = HumanMessage(content=user_text, id=f"user-{uuid.uuid4()}")
 
-    invoke_payload = {"messages": [user_message]}
+    invoke_payload = {"messages": [user_message], "chat_model": selected_chat_model}
     if not thread_has_live_state(thread_id):
         invoke_payload = ensure_initial_thread_state(
             chapter_name=chapter_name,
@@ -2619,6 +2703,7 @@ def run_stateful_chat(
             lesson_text=lesson_text,
             history=history,
             saved_thread_state=saved_thread_state,
+            chat_model=selected_chat_model,
         )
         invoke_payload["messages"] = [*invoke_payload.get("messages", []), user_message]
 
@@ -2626,6 +2711,7 @@ def run_stateful_chat(
         state = graph.invoke(invoke_payload, config=config)
     except Exception as exc:
         raise ValueError(f"Chat generation failed: {exc}") from exc
+    state = {**state, "chat_model": selected_chat_model}
 
     turn_messages = extract_turn_messages(state.get("messages") or [], user_message.id)
     last_ai = latest_ai_message(turn_messages) or latest_ai_message(state.get("messages"))
@@ -2683,6 +2769,7 @@ def run_stateful_chat(
         selected_images=selected_images,
         response_text=response_text,
         current_chunk=current_chunk,
+        chat_model=selected_chat_model,
     )
     updated_state = {
         **state,
@@ -2708,12 +2795,12 @@ def run_stateful_chat(
     }
 
 
-def run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_catalog, history, user_text):
+def run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_catalog, history, user_text, chat_model=None):
     del thread_id
 
-    llm = get_llm()
+    llm = get_llm(chat_model)
     if llm is None:
-        raise ValueError("GROQ_API_KEY is not set")
+        raise ValueError(get_missing_chat_model_key_message(chat_model))
 
     retrieval_query = build_retrieval_query(user_text, history)
     retrieval = retrieve_relevant_lesson_chunks(
@@ -2728,7 +2815,16 @@ def run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_catalog, hist
     messages.append(HumanMessage(content=prompt))
 
     try:
-        response = llm.invoke(messages)
+        response = invoke_llm_with_logging(
+            llm,
+            messages,
+            context="simple_graph.run_grounded_chat",
+            metadata={
+                "chat_model": resolve_chat_model_id(chat_model),
+                "chapter_name": chapter_name,
+                "lesson_name": lesson_name,
+            },
+        )
     except Exception as exc:
         raise ValueError(normalize_error_message(exc)) from exc
 
@@ -2759,9 +2855,18 @@ def run_chat(
     user_text,
     saved_thread_state=None,
     lesson_catalog=None,
+    chat_model=None,
 ):
     if isinstance(lesson_source, list) and lesson_catalog is None:
-        return run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_source, history, user_text)
+        return run_grounded_chat(
+            thread_id,
+            chapter_name,
+            lesson_name,
+            lesson_source,
+            history,
+            user_text,
+            chat_model=chat_model,
+        )
 
     return run_stateful_chat(
         thread_id=thread_id,
@@ -2772,4 +2877,5 @@ def run_chat(
         user_text=user_text,
         saved_thread_state=saved_thread_state,
         lesson_catalog=lesson_catalog,
+        chat_model=chat_model,
     )

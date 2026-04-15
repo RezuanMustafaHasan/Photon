@@ -47,6 +47,7 @@ from graph.simple_graph import (
     is_checkpoint_chunk,
     is_done_response,
     parse_grounded_response,
+    resolve_chat_model_config,
     resolve_images_for_response,
     run_chat,
     should_advance_to_next_chunk,
@@ -239,6 +240,31 @@ class SimpleGraphTests(unittest.TestCase):
         self.assertNotIn("img-used", candidate_ids)
         self.assertIn("img-fresh", candidate_ids)
 
+    @patch("graph.simple_graph.load_images_from_database")
+    def test_build_image_candidates_never_recycles_used_images(self, mock_load_images):
+        mock_load_images.return_value = [
+            {
+                "image_id": "img-used",
+                "imageURL": "https://example.com/used.png",
+                "description": "Electric field lines around a positive charge",
+                "topic": ["তড়িৎ বলরেখা"],
+            }
+        ]
+
+        candidates = build_image_candidates_for_reply(
+            chapter_name="Static Electricity",
+            lesson_name="তড়িৎ বলরেখা",
+            response_text="এখানে তড়িৎ বলরেখার দিক বোঝানো হচ্ছে।",
+            user_text="ছবি দিয়ে বুঝাও",
+            current_chunk="তড়িৎ বলরেখা ধনাত্মক চার্জ থেকে ঋণাত্মক চার্জের দিকে যায়।",
+            topic_image_map={},
+            current_chunk_index=0,
+            used_image_ids={"img-used"},
+            tool_selected_images=[],
+        )
+
+        self.assertEqual(candidates, [])
+
     @patch("graph.simple_graph.call_llm_for_json")
     @patch("graph.simple_graph.load_images_from_database")
     def test_resolve_images_rewrites_database_caption_for_display(self, mock_load_images, mock_call_llm_for_json):
@@ -347,6 +373,31 @@ class SimpleGraphTests(unittest.TestCase):
         self.assertEqual(len(result["citations"]), 1)
         self.assertEqual(result["citations"][0]["lesson_name"], "Electric Field")
         self.assertEqual(result["citations"][0]["snippet"], "")
+
+    @patch("graph.simple_graph.get_llm")
+    def test_run_chat_passes_selected_chat_model_to_llm(self, mock_get_llm):
+        mock_get_llm.return_value = FakeLLM(
+            '{"textbook_answer":"পাঠ থেকে নেওয়া উত্তর।","extra_explanation":"অতিরিক্ত ব্যাখ্যা।"}'
+        )
+
+        run_chat(
+            "thread-4",
+            "Static Electricity",
+            "Coulomb's Law",
+            [SAMPLE_LESSON, SECOND_LESSON],
+            [],
+            "বল কমে কেন?",
+            chat_model="openai:gpt-4.1-mini",
+        )
+
+        mock_get_llm.assert_called_with("openai:gpt-4.1-mini")
+
+    def test_resolve_chat_model_config_accepts_provider_prefixed_models(self):
+        config = resolve_chat_model_config("openai:gpt-5.4-nano")
+
+        self.assertEqual(config["id"], "openai:gpt-5.4-nano")
+        self.assertEqual(config["provider"], "openai")
+        self.assertEqual(config["model"], "gpt-5.4-nano")
 
     def test_parse_grounded_response_repairs_unescaped_latex_commands(self):
         parsed = parse_grounded_response(

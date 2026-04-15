@@ -25,11 +25,11 @@ def load_env_file(env_path):
                 key, value = line.split("=", 1)
                 key = key.strip()
                 value = value.strip().strip('"').strip("'")
-                if key and key not in os.environ:
+                if key:
                     os.environ[key] = value
         return
 
-    load_dotenv(env_path)
+    load_dotenv(env_path, override=True)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -61,6 +61,7 @@ class ChatRequest(BaseModel):
     chapter_name: str
     lesson_name: str
     history_mode: str = "default"
+    chat_model: str | None = None
 
 
 class ChatCitation(BaseModel):
@@ -174,7 +175,7 @@ def root():
 async def chat(payload: ChatRequest):
     request_started = perf_counter()
     log_chat_timing(
-        f"[chat] fastapi start user={payload.user_id} chapter={payload.chapter_name} lesson={payload.lesson_name}"
+        f"[chat] fastapi start user={payload.user_id} chapter={payload.chapter_name} lesson={payload.lesson_name} model={payload.chat_model or 'default'}"
     )
 
     log_path = os.path.join(os.path.dirname(__file__), "incoming_requests.txt")
@@ -216,6 +217,7 @@ async def chat(payload: ChatRequest):
             user_text=payload.message,
             saved_thread_state=saved_thread_state,
             lesson_catalog=lesson_catalog,
+            chat_model=payload.chat_model,
         )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
