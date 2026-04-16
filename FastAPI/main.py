@@ -229,6 +229,7 @@ async def chat(payload: ChatRequest):
     thread_state = response_payload.get("thread_state") or {}
     textbook_answer = str(response_payload.get("textbook_answer") or "")
     extra_explanation = str(response_payload.get("extra_explanation") or "")
+    check_question = str(response_payload.get("check_question") or "")
     citations = response_payload.get("citations") or []
     if not isinstance(response_images, list):
         response_images = []
@@ -243,6 +244,8 @@ async def chat(payload: ChatRequest):
         "extra_explanation": extra_explanation,
         "citations": citations if isinstance(citations, list) else [],
     }
+    if check_question:
+        assistant_entry["check_question"] = check_question
     if response_images:
         assistant_entry["images"] = response_images
 
