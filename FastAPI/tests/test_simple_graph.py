@@ -154,6 +154,16 @@ FLOW_TOPIC_LESSON = {
     ],
 }
 
+ONE_TOPIC_LESSON = {
+    "lesson_name": "Simple Harmonic Motion",
+    "topics": [
+        {
+            "title": "মূল ধারণা",
+            "content": "সরল হার্মোনিক গতিতে পুনঃস্থাপন বল সবসময় সরণের বিপরীত দিকে কাজ করে।",
+        }
+    ],
+}
+
 FIGURE_TOPIC_LESSON = {
     "lesson_name": "তড়িৎ বলরেখা",
     "topics": [
@@ -189,6 +199,18 @@ class SimpleGraphTests(unittest.TestCase):
         self.assertNotIn("From your lesson", output)
         self.assertNotIn("Extra explanation", output)
         self.assertNotIn("Sources", output)
+
+    def test_compose_chat_markdown_strips_diagram_serials(self):
+        output = compose_chat_markdown(
+            "চিত্র ২.৬: এই বিন্যাসে রেখার দিক বোঝানো হয়েছে।",
+            "Figure 3.1 দেখালে আরও পরিষ্কার হয়।",
+            [],
+            check_question="চিত্র ১.২ অনুযায়ী দিক কী?",
+        )
+
+        self.assertNotIn("২.৬", output)
+        self.assertNotIn("3.1", output)
+        self.assertNotIn("১.২", output)
 
     def test_parse_grounded_response_repairs_unescaped_latex_commands(self):
         parsed = parse_grounded_response(
@@ -443,9 +465,92 @@ class SimpleGraphTests(unittest.TestCase):
         )
 
         self.assertIn("দ্বিতীয় ধারণা", second["textbook_answer"])
+        self.assertIn("তোমার আগের উত্তর ঠিক আছে", second["response"])
         self.assertEqual(second["thread_state"]["concept_index"], 1)
         self.assertEqual(second["thread_state"]["current_step_index"], 1)
         self.assertTrue(second["thread_state"]["awaiting_understanding"])
+
+    @patch("graph.simple_graph.load_images_from_database", return_value=[])
+    @patch("graph.simple_graph.get_llm")
+    def test_run_chat_answers_side_question_without_losing_lesson_step(self, mock_get_llm, _mock_load_images):
+        llm = LessonFlowLLM(
+            [
+                '{"textbook_answer":"প্রথম ধারণা: প্রতিটি ক্রিয়ার বিপরীতে সমান ও বিপরীত প্রতিক্রিয়া থাকে।","extra_explanation":"এটি জোড়া বল হিসেবে কাজ করে।","check_question":"প্রতিক্রিয়া বল কি থাকে?"}',
+                '{"textbook_answer":"ভালো প্রশ্ন। সমান হয় কারণ ক্রিয়া-প্রতিক্রিয়া একই আন্তঃক্রিয়ার জোড়া বল।","extra_explanation":"একটি বস্তু অন্যটিতে যত বল দেয়, অন্যটিও তত বল ফিরিয়ে দেয়।","check_question":"এই জোড়া বল কি একই বস্তুর উপর কাজ করে?"}',
+            ]
+        )
+        mock_get_llm.return_value = llm
+
+        first = run_chat(
+            "flow-side-q",
+            "Dynamics",
+            "Newton's Third Law",
+            FLOW_TOPIC_LESSON,
+            [],
+            "start",
+        )
+        second = run_chat(
+            "flow-side-q",
+            "Dynamics",
+            "Newton's Third Law",
+            FLOW_TOPIC_LESSON,
+            [{"role": "assistant", "content": first["response"]}],
+            "কিন্তু সমান হয় কেন?",
+            saved_thread_state=first["thread_state"],
+        )
+
+        self.assertIn("ভালো প্রশ্ন", second["textbook_answer"])
+        self.assertEqual(second["thread_state"]["concept_index"], 0)
+        self.assertEqual(second["thread_state"]["current_step_index"], 0)
+        self.assertTrue(second["thread_state"]["awaiting_understanding"])
+        self.assertIn("ছোট প্রশ্ন:", second["response"])
+
+    @patch("graph.simple_graph.load_images_from_database", return_value=[])
+    @patch("graph.simple_graph.get_llm")
+    def test_run_chat_returns_done_after_last_concept_and_allows_follow_up_qa(self, mock_get_llm, _mock_load_images):
+        llm = LessonFlowLLM(
+            [
+                '{"textbook_answer":"আজ আমরা সরল হার্মোনিক গতির মূল ধারণা দেখছি। পুনঃস্থাপন বল সরণের বিপরীত দিকে থাকে।","extra_explanation":"এই কারণেই বস্তু ভারসাম্যের দিকে ফিরে আসে।","check_question":"পুনঃস্থাপন বল কোন দিকে কাজ করে?"}',
+                '{"textbook_answer":"পুনঃস্থাপন বল সবসময় সরণের বিপরীত দিকে কাজ করে।","extra_explanation":"এটাই সরল হার্মোনিক গতির মূল শর্ত।"}',
+            ]
+        )
+        mock_get_llm.return_value = llm
+
+        first = run_chat(
+            "flow-done",
+            "Oscillation",
+            "Simple Harmonic Motion",
+            ONE_TOPIC_LESSON,
+            [],
+            "start",
+        )
+        done = run_chat(
+            "flow-done",
+            "Oscillation",
+            "Simple Harmonic Motion",
+            ONE_TOPIC_LESSON,
+            [{"role": "assistant", "content": first["response"]}],
+            "fine",
+            saved_thread_state=first["thread_state"],
+        )
+        follow_up = run_chat(
+            "flow-done",
+            "Oscillation",
+            "Simple Harmonic Motion",
+            ONE_TOPIC_LESSON,
+            [
+                {"role": "assistant", "content": first["response"]},
+                {"role": "assistant", "content": done["response"]},
+            ],
+            "এখন বলো, সরল হার্মোনিক গতি কী?",
+            saved_thread_state=done["thread_state"],
+        )
+
+        self.assertEqual(done["response"], "DONE")
+        self.assertEqual(done["textbook_answer"], "DONE")
+        self.assertTrue(done["thread_state"]["lesson_complete"])
+        self.assertFalse(done["thread_state"]["awaiting_understanding"])
+        self.assertIn("সরল হার্মোনিক", follow_up["response"])
 
     @patch("graph.simple_graph.load_images_from_database", return_value=[])
     @patch("graph.simple_graph.get_llm")
@@ -517,13 +622,14 @@ class SimpleGraphTests(unittest.TestCase):
         )
 
         self.assertIn("আবার সহজভাবে", second["textbook_answer"])
+        self.assertIn("তোমার আগের উত্তর পুরোপুরি ঠিক হয়নি", second["response"])
         self.assertEqual(second["thread_state"]["concept_index"], 0)
         self.assertEqual(second["thread_state"]["current_step_index"], 0)
         self.assertTrue(second["thread_state"]["awaiting_understanding"])
 
     @patch("graph.simple_graph.load_images_from_database")
     @patch("graph.simple_graph.get_llm")
-    def test_run_chat_does_not_reuse_same_image_in_lesson_flow(self, mock_get_llm, mock_load_images):
+    def test_run_chat_can_reuse_image_when_highly_relevant_in_lesson_flow(self, mock_get_llm, mock_load_images):
         llm = LessonFlowLLM(
             [
                 '{"textbook_answer":"প্রথম ধাপ: তড়িৎ বলরেখা ধনাত্মক আধান থেকে বের হয়।","extra_explanation":"","check_question":"ধনাত্মক আধান থেকে রেখা কোন দিকে যায়?"}',
@@ -573,7 +679,8 @@ class SimpleGraphTests(unittest.TestCase):
 
         self.assertEqual(len(first["images"]), 1)
         self.assertEqual(first["images"][0]["image_id"], "img-lines")
-        self.assertEqual(second["images"], [])
+        self.assertEqual(len(second["images"]), 1)
+        self.assertEqual(second["images"][0]["image_id"], "img-lines")
 
     @patch("graph.simple_graph.load_images_from_database", return_value=[])
     @patch("graph.simple_graph.get_llm")

@@ -74,6 +74,8 @@ GROUNDING_SYSTEM_PROMPT = (
     "- Do not write raw LaTeX commands like \\frac outside math delimiters.\n"
     "- Keep Bangla words outside the math delimiters whenever possible.\n"
     "- When listing formulas, prefer short markdown bullets and wrap each formula in $...$ or $$...$$.\n"
+    "- Never mention any diagram/figure serial number like চিত্র 2.6 or Figure 3.1.\n"
+    "- Do not ask the student to look at a figure unless an image is rendered in chat.\n"
     "- Keep the tone simple, student-friendly, and concise.\n"
     "- Prefer Bangla if the lesson or student message is primarily Bangla; otherwise match the student's language."
 )
@@ -92,16 +94,40 @@ LESSON_FLOW_SYSTEM_PROMPT = (
     "- Teach only this one topic. Do not jump to the next topic.\n"
     "- Explain the topic in enough detail to genuinely teach it, not as a one-line summary.\n"
     "- Cover all important ideas present in the topic content. Do not skip key points.\n"
+    "- Teach naturally like a real tutor in conversation style. Do not dump a dry list of mini-topics.\n"
     "- Use markdown structure, not plain text only.\n"
     "- Start textbook_answer with a short markdown heading for the current topic.\n"
     "- Use short bullets where they help clarity.\n"
     "- If the topic content contains a notation, equation, symbol, definition, or named rule, include it clearly.\n"
+    "- If the topic includes a derivation or proof idea, explain that proof path clearly in simple steps.\n"
     "- Use simple Bangla-friendly language.\n"
     "- Use simplified examples or analogies when they help understanding.\n"
     "- Do not mention topic or lesson serial numbers like 2.6, 3.2, etc. Start directly with the idea.\n"
+    "- End each turn with one short conceptual check question to verify understanding of this topic.\n"
     "- check_question must be exactly one short conceptual question.\n"
     "- Do not say the request is unclear.\n"
+    "- Never mention any figure or diagram serial number such as চিত্র 2.6 or Figure 3.1.\n"
+    "- Explain figure-related ideas in plain words; do not ask the student to look at a figure here.\n"
     "- When writing formulas or symbols, always use Markdown math delimiters: inline $...$ and block $$...$$."
+)
+LESSON_FLOW_QUESTION_SYSTEM_PROMPT = (
+    "You are a Bangladeshi HSC physics tutor handling a student's follow-up question while a lesson topic is in progress.\n"
+    "You must respond in valid JSON only, with no markdown fences.\n"
+    "Return this exact schema:\n"
+    "{\n"
+    '  "textbook_answer": "direct answer in tutor style, tied back to the current lesson topic",\n'
+    '  "extra_explanation": "optional broader physics explanation",\n'
+    '  "check_question": "one short conceptual question about the current lesson topic"\n'
+    "}\n"
+    "Rules:\n"
+    "- Answer the student's question first, clearly and naturally.\n"
+    "- Keep the lesson flow anchored to the current topic; do not jump ahead to the next topic.\n"
+    "- If the exact answer is outside the current topic text or outside this lesson but still physics-related, answer it properly in extra_explanation and reconnect to the current topic.\n"
+    "- If the question is non-physics, reply briefly and politely, then return to the current topic flow.\n"
+    "- Use simple, student-friendly language and include equations/notation/proof steps when needed.\n"
+    "- check_question must be exactly one short conceptual question for the current topic.\n"
+    "- Never mention any figure or diagram serial number such as চিত্র 2.6 or Figure 3.1.\n"
+    "- Do not say the request is unclear."
 )
 UNDERSTANDING_CHECK_SYSTEM_PROMPT = (
     "You evaluate whether a Bangladeshi HSC physics student understood the last taught concept.\n"
@@ -118,6 +144,7 @@ UNDERSTANDING_CHECK_SYSTEM_PROMPT = (
 )
 IMAGE_TOOL_NAME = "fetch_lesson_image"
 MAX_HISTORY_ITEMS = 8
+IMAGE_REUSE_SCORE_THRESHOLD = 8
 DEFAULT_CHAT_MODEL = "groq:openai/gpt-oss-120b"
 DEFAULT_CHAT_MODEL_CONFIG = {
     "id": DEFAULT_CHAT_MODEL,
@@ -133,6 +160,15 @@ LITERAL_TAB_PATTERN = re.compile(r"\\t(?![A-Za-z])")
 TOPIC_NUMBER_PREFIX_PATTERN = re.compile(r"^\s*[০-৯0-9]+(?:\s*[.\-:]\s*[০-৯0-9]+)*\s*[:।.-]?\s*")
 FIGURE_TITLE_PATTERN = re.compile(r"চিত্র(?:\s*[০-৯0-9]+(?:\.[০-৯0-9]+)*)?\s*[:：-]\s*([^\n\r]+)")
 FIGURE_LINE_PATTERN = re.compile(r"([^\n\r]*চিত্র[^\n\r]*)")
+BANGLA_DIAGRAM_SERIAL_PATTERN = re.compile(
+    r"চিত্র\s*[০-৯0-9]+(?:\s*[.\-]\s*[০-৯0-9]+)*\s*[:：-]?\s*",
+    flags=re.IGNORECASE,
+)
+ENGLISH_DIAGRAM_SERIAL_PATTERN = re.compile(
+    r"\b(?:figure|fig\.?|diagram)\s*[0-9]+(?:\s*[.\-]\s*[0-9]+)*\s*[:：-]?\s*",
+    flags=re.IGNORECASE,
+)
+IMAGE_REFERENCE_LINE_PATTERN = re.compile(r"(?im)^\s*(?:[-*]\s*)?(?:চিত্র|figure|fig\.?|diagram|ছবি|image)\b[^\n]*$")
 POSITIVE_UNDERSTANDING_PHRASES = {
     "fine",
     "ok",
@@ -295,6 +331,38 @@ def normalize_grounded_text(value):
     return text.strip()
 
 
+def strip_diagram_serial_numbers(value):
+    text = str(value or "")
+    text = BANGLA_DIAGRAM_SERIAL_PATTERN.sub("চিত্র ", text)
+    text = ENGLISH_DIAGRAM_SERIAL_PATTERN.sub("figure ", text)
+    text = re.sub(r" {2,}", " ", text)
+    return text.strip()
+
+
+def remove_unrendered_image_references(value):
+    text = str(value or "")
+    text = IMAGE_REFERENCE_LINE_PATTERN.sub("", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def prepend_lesson_feedback(response_text, feedback_text):
+    body = normalize_grounded_text(response_text)
+    feedback = normalize_grounded_text(feedback_text)
+    if not feedback:
+        return body
+    if not body:
+        return feedback
+    return f"{feedback}\n\n{body}"
+
+
+def apply_image_reference_policy(response_text, response_images):
+    cleaned = normalize_grounded_text(response_text)
+    if response_images:
+        return cleaned
+    return remove_unrendered_image_references(cleaned)
+
+
 def collapse_inline_whitespace(value):
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
@@ -376,10 +444,11 @@ def merge_used_image_ids(existing, new_ids):
     return merged
 
 
-def compose_chat_markdown(textbook_answer, extra_explanation, citations, check_question=""):
-    textbook_answer = normalize_grounded_text(textbook_answer)
-    extra_explanation = normalize_grounded_text(extra_explanation)
-    check_question = normalize_grounded_text(check_question)
+def compose_chat_markdown(textbook_answer, extra_explanation, citations, check_question="", next_step_hint=""):
+    textbook_answer = strip_diagram_serial_numbers(normalize_grounded_text(textbook_answer))
+    extra_explanation = strip_diagram_serial_numbers(normalize_grounded_text(extra_explanation))
+    check_question = strip_diagram_serial_numbers(normalize_grounded_text(check_question))
+    next_step_hint = strip_diagram_serial_numbers(normalize_grounded_text(next_step_hint))
     del citations
 
     parts = []
@@ -387,6 +456,8 @@ def compose_chat_markdown(textbook_answer, extra_explanation, citations, check_q
         parts.append(textbook_answer)
     if extra_explanation:
         parts.append(extra_explanation)
+    if next_step_hint:
+        parts.append(next_step_hint)
     if check_question:
         parts.append(f"ছোট প্রশ্ন: {check_question}")
 
@@ -402,7 +473,14 @@ def assistant_history_text(item):
     extra_explanation = str(item.get("extra_explanation") or "").strip()
     citations = item.get("citations") if isinstance(item.get("citations"), list) else []
     check_question = str(item.get("check_question") or "").strip()
-    return compose_chat_markdown(textbook_answer, extra_explanation, citations, check_question=check_question)
+    next_hint = str(item.get("next_hint") or "").strip()
+    return compose_chat_markdown(
+        textbook_answer,
+        extra_explanation,
+        citations,
+        check_question=check_question,
+        next_step_hint=next_hint,
+    )
 
 
 def build_history_messages(history):
@@ -591,7 +669,7 @@ def normalize_lesson_flow_state(saved_thread_state):
 def clean_figure_hint(value):
     text = collapse_inline_whitespace(value)
     text = re.sub(r"[।.:\-–—\s]+$", "", text).strip()
-    return strip_topic_numbering(text)
+    return strip_diagram_serial_numbers(strip_topic_numbering(text))
 
 
 def extract_figure_hints(value):
@@ -682,7 +760,7 @@ def build_lesson_flow_prompt(
     action_line = (
         "The student did not clearly show understanding yet. Re-explain the same topic more simply and more clearly, then ask one new short conceptual question."
         if re_explain
-        else "Teach this topic clearly and with enough detail, then ask one short conceptual question."
+        else "Teach this topic clearly in natural tutor style, then ask one short conceptual question."
     )
     follow_up_block = ""
     if re_explain:
@@ -705,18 +783,107 @@ def build_lesson_flow_prompt(
         f"{action_line}\n"
         "Give a solid teaching explanation for this topic in this turn.\n"
         "Explain all important parts of this topic clearly, but do not move to the next topic.\n"
+        "Do not dump a plain list of all lesson topics; keep it conversational and concept-focused.\n"
         "Use markdown headings and, when helpful, short bullets.\n"
-        "If the topic includes notation, symbols, equations, or definitions, include them clearly.\n"
+        "If the topic includes notation, symbols, equations, definitions, or proof steps, include them clearly.\n"
         "Do not repeat any lesson number or serial number such as 2.6 or 3.2.\n"
-        "If a figure is mentioned, use that idea naturally while explaining.\n\n"
+        "If a figure is mentioned in the source text, explain its idea in words only and do not mention any figure serial.\n\n"
         f"{follow_up_block}"
         f"{figure_block}"
         f"Full topic content:\n{concept.get('chunk_text')}"
     )
 
 
+def build_lesson_flow_question_prompt(
+    chapter_name,
+    lesson_name,
+    concept,
+    student_question,
+    previous_question="",
+):
+    previous_block = ""
+    if previous_question:
+        previous_block = f"Previous check question:\n{previous_question}\n\n"
+
+    return (
+        f"Chapter: {chapter_name}\n"
+        f"Lesson: {lesson_name}\n"
+        f"Current topic: {strip_topic_numbering(concept.get('section_label'))}\n\n"
+        "The lesson is in progress and the student asked a follow-up question.\n"
+        "Answer the question clearly first, then reconnect to this current topic.\n"
+        "If the question is outside this lesson but physics-related, still answer it properly and then return to this topic flow.\n"
+        "Do not move to the next topic yet.\n"
+        "Ask one short conceptual check question for this same current topic.\n\n"
+        f"{previous_block}"
+        f"Current topic content:\n{concept.get('chunk_text')}\n\n"
+        f"Student question:\n{student_question}"
+    )
+
+
 def normalize_joined_text(value):
     return re.sub(r"\s+", "", normalize_text(value))
+
+
+def build_next_step_hint(concepts, concept_index):
+    if not isinstance(concepts, list) or not concepts:
+        return ""
+
+    next_index = concept_index + 1
+    if next_index >= len(concepts):
+        return "এই প্রশ্নের উত্তর ঠিক হলে lesson শেষ হবে।"
+
+    next_label = strip_topic_numbering(concepts[next_index].get("section_label") or f"ধাপ {next_index + 1}")
+    return f"তোমার উত্তর ঠিক হলে, এরপর আমরা {next_label} ব্যাখ্যা করব।"
+
+
+def is_student_question_in_lesson_flow(user_text):
+    text = str(user_text or "").strip()
+    if not text:
+        return False
+
+    normalized = normalize_text(text)
+    joined = normalize_joined_text(text)
+    positive_joined = {normalize_joined_text(item) for item in POSITIVE_UNDERSTANDING_PHRASES}
+    negative_joined = {normalize_joined_text(item) for item in NEGATIVE_UNDERSTANDING_PHRASES}
+
+    if normalized in POSITIVE_UNDERSTANDING_PHRASES or joined in positive_joined:
+        return False
+    if normalized in NEGATIVE_UNDERSTANDING_PHRASES or joined in negative_joined:
+        return False
+
+    tokens = tokenize(text)
+    if not tokens:
+        return False
+
+    if "?" in text or "？" in text:
+        return True
+
+    question_tokens = {
+        "why",
+        "how",
+        "what",
+        "which",
+        "when",
+        "where",
+        "explain",
+        "derive",
+        "proof",
+        "difference",
+        "কেন",
+        "কিভাবে",
+        "কীভাবে",
+        "কী",
+        "কি",
+        "কখন",
+        "কোথায়",
+        "কোথায়",
+        "ব্যাখ্যা",
+        "প্রমাণ",
+    }
+    if tokens & question_tokens:
+        return True
+
+    return False
 
 
 def romanized_keyword_match(student_reply, concept):
@@ -877,16 +1044,35 @@ def find_best_lesson_image(chapter_name, lesson_name, hint, used_image_ids=None)
     images = load_images_from_database(chapter_name, lesson_name)
     excluded = {str(item).strip() for item in used_image_ids or [] if str(item).strip()}
 
-    best_image = None
-    best_score = 0
+    best_unused_image = None
+    best_unused_score = 0
+    best_overall_image = None
+    best_overall_score = 0
+
     for image in images:
         image_id = str(image.get("image_id") or "").strip()
-        if not image_id or image_id in excluded:
+        if not image_id:
             continue
+
         score = score_image_relevance(hint, image)
-        if score > best_score:
-            best_score = score
-            best_image = image
+        if score > best_overall_score:
+            best_overall_score = score
+            best_overall_image = image
+
+        if image_id in excluded:
+            continue
+        if score > best_unused_score:
+            best_unused_score = score
+            best_unused_image = image
+
+    best_image = None
+    best_score = 0
+    if best_unused_image is not None and best_unused_score > 0:
+        best_image = best_unused_image
+        best_score = best_unused_score
+    elif best_overall_image is not None and best_overall_score >= IMAGE_REUSE_SCORE_THRESHOLD:
+        best_image = best_overall_image
+        best_score = best_overall_score
 
     if best_image is None or best_score <= 0:
         return None
@@ -1028,6 +1214,29 @@ def resolve_images_for_response(
     return resolved
 
 
+def append_image_descriptions_to_response(response_text, response_images):
+    base = normalize_grounded_text(response_text)
+    if not base:
+        return ""
+    if not isinstance(response_images, list) or not response_images:
+        return base
+
+    normalized_base = normalize_text(base)
+    additions = []
+    for image in response_images:
+        description = normalize_grounded_text(image.get("description") or "")
+        if not description:
+            continue
+        normalized_description = normalize_text(description)
+        if normalized_description and normalized_description in normalized_base:
+            continue
+        additions.append(f"চিত্র সহায়তা: {description}")
+
+    if not additions:
+        return base
+    return f"{base}\n\n" + "\n".join(additions)
+
+
 def extract_lesson_text(lesson_source, fallback_lesson_name=""):
     if isinstance(lesson_source, str):
         return lesson_source.strip()
@@ -1122,6 +1331,7 @@ def select_images_for_concept(
     concept,
     response_text,
     used_image_ids=None,
+    extra_hint="",
 ):
     figure_hints = extract_figure_hints(concept.get("chunk_text"))
     for hint in figure_hints:
@@ -1137,6 +1347,7 @@ def select_images_for_concept(
     query_parts = [
         strip_topic_numbering(concept.get("section_label") or ""),
         str(concept.get("chunk_text") or "").strip(),
+        str(extra_hint or "").strip(),
         str(response_text or "").strip(),
     ]
     query = "\n".join(part for part in query_parts if part).strip()
@@ -1155,10 +1366,7 @@ def select_images_for_concept(
 
 
 def build_lesson_completion_payload(used_image_ids=None):
-    response_text = (
-        "দারুণ, এই lesson-এর মূল ধাপগুলো শেষ হয়েছে।\n\n"
-        "চাইলে এখন আমি পুরো lesson-এর ছোট summary, revision, বা practice question দিতে পারি।"
-    )
+    response_text = "DONE"
     return {
         "response": response_text,
         "images": [],
@@ -1187,6 +1395,8 @@ def teach_lesson_concept(
     student_reply="",
     previous_question="",
     used_image_ids=None,
+    next_step_hint="",
+    extra_image_hint="",
 ):
     messages = [
         SystemMessage(content=LESSON_FLOW_SYSTEM_PROMPT),
@@ -1219,26 +1429,30 @@ def teach_lesson_concept(
         raise ValueError(normalize_error_message(exc)) from exc
 
     parsed = parse_teaching_response(response.content)
-    response_markdown = compose_chat_markdown(
+    base_response_markdown = compose_chat_markdown(
         parsed["textbook_answer"],
         parsed["extra_explanation"],
         [],
         check_question=parsed["check_question"],
+        next_step_hint=next_step_hint,
     )
     selected_images = select_images_for_concept(
         chapter_name=chapter_name,
         lesson_name=lesson_name,
         concept=concept,
-        response_text=response_markdown,
+        response_text=base_response_markdown,
         used_image_ids=used_image_ids,
+        extra_hint=extra_image_hint,
     )
     response_images = resolve_images_for_response(
         chapter_name=chapter_name,
         lesson_name=lesson_name,
         selected_images=selected_images,
-        response_text=response_markdown,
+        response_text=base_response_markdown,
         chat_model=chat_model,
     )
+    response_markdown = append_image_descriptions_to_response(base_response_markdown, response_images)
+    response_markdown = apply_image_reference_policy(response_markdown, response_images)
     updated_used_image_ids = merge_used_image_ids(
         used_image_ids,
         [image.get("image_id") for image in response_images],
@@ -1259,6 +1473,96 @@ def teach_lesson_concept(
         "textbook_answer": parsed["textbook_answer"],
         "extra_explanation": parsed["extra_explanation"],
         "check_question": parsed["check_question"],
+        "next_hint": next_step_hint,
+        "citations": [],
+    }
+
+
+def answer_lesson_flow_question(
+    llm,
+    chapter_name,
+    lesson_name,
+    concept,
+    student_question,
+    previous_question="",
+    chat_model=None,
+    used_image_ids=None,
+    next_step_hint="",
+):
+    messages = [
+        SystemMessage(content=LESSON_FLOW_QUESTION_SYSTEM_PROMPT),
+        HumanMessage(
+            content=build_lesson_flow_question_prompt(
+                chapter_name=chapter_name,
+                lesson_name=lesson_name,
+                concept=concept,
+                student_question=student_question,
+                previous_question=previous_question,
+            )
+        ),
+    ]
+
+    try:
+        response = invoke_llm_with_logging(
+            llm,
+            messages,
+            context="simple_graph.answer_lesson_flow_question",
+            metadata={
+                "chat_model": resolve_chat_model_id(chat_model),
+                "chapter_name": chapter_name,
+                "lesson_name": lesson_name,
+                "concept_index": concept.get("concept_index"),
+            },
+        )
+    except Exception as exc:
+        raise ValueError(normalize_error_message(exc)) from exc
+
+    parsed = parse_teaching_response(response.content)
+    base_response_markdown = compose_chat_markdown(
+        parsed["textbook_answer"],
+        parsed["extra_explanation"],
+        [],
+        check_question=parsed["check_question"],
+        next_step_hint=next_step_hint,
+    )
+    selected_images = select_images_for_concept(
+        chapter_name=chapter_name,
+        lesson_name=lesson_name,
+        concept=concept,
+        response_text=base_response_markdown,
+        used_image_ids=used_image_ids,
+        extra_hint=student_question,
+    )
+    response_images = resolve_images_for_response(
+        chapter_name=chapter_name,
+        lesson_name=lesson_name,
+        selected_images=selected_images,
+        response_text=base_response_markdown,
+        chat_model=chat_model,
+    )
+    response_markdown = append_image_descriptions_to_response(base_response_markdown, response_images)
+    response_markdown = apply_image_reference_policy(response_markdown, response_images)
+    updated_used_image_ids = merge_used_image_ids(
+        used_image_ids,
+        [image.get("image_id") for image in response_images],
+    )
+
+    return {
+        "response": response_markdown,
+        "images": response_images,
+        "thread_state": {
+            "mode": "lesson_flow",
+            "concept_index": max(0, safe_int(concept.get("concept_index"), 0)),
+            "current_step_index": max(0, safe_int(concept.get("concept_index"), 0)),
+            "awaiting_understanding": True,
+            "lesson_complete": False,
+            "last_question": parsed["check_question"],
+            "used_image_ids": updated_used_image_ids,
+        },
+        "textbook_answer": parsed["textbook_answer"],
+        "extra_explanation": parsed["extra_explanation"],
+        "check_question": parsed["check_question"],
+        "next_hint": next_step_hint,
         "citations": [],
     }
 
@@ -1298,8 +1602,22 @@ def run_lesson_flow_chat(
 
     concept_index = min(flow_state["current_step_index"], len(concepts) - 1)
     current_concept = concepts[concept_index]
+    current_next_step_hint = build_next_step_hint(concepts, concept_index)
 
     if flow_state["awaiting_understanding"] and not flow_state["lesson_complete"]:
+        if is_student_question_in_lesson_flow(user_text):
+            return answer_lesson_flow_question(
+                llm=llm,
+                chapter_name=chapter_name,
+                lesson_name=lesson_name,
+                concept=current_concept,
+                student_question=user_text,
+                previous_question=flow_state["last_question"],
+                chat_model=chat_model,
+                used_image_ids=flow_state["used_image_ids"],
+                next_step_hint=current_next_step_hint,
+            )
+
         understood = assess_understanding_reply(
             llm=llm,
             chapter_name=chapter_name,
@@ -1312,16 +1630,22 @@ def run_lesson_flow_chat(
             next_index = concept_index + 1
             if next_index >= len(concepts):
                 return build_lesson_completion_payload(flow_state["used_image_ids"])
-            return teach_lesson_concept(
+            next_payload = teach_lesson_concept(
                 llm=llm,
                 chapter_name=chapter_name,
                 lesson_name=lesson_name,
                 concept=concepts[next_index],
                 chat_model=chat_model,
                 used_image_ids=flow_state["used_image_ids"],
+                next_step_hint=build_next_step_hint(concepts, next_index),
             )
+            next_payload["response"] = prepend_lesson_feedback(
+                next_payload.get("response"),
+                "তোমার আগের উত্তর ঠিক আছে।",
+            )
+            return next_payload
 
-        return teach_lesson_concept(
+        retry_payload = teach_lesson_concept(
             llm=llm,
             chapter_name=chapter_name,
             lesson_name=lesson_name,
@@ -1331,7 +1655,14 @@ def run_lesson_flow_chat(
             student_reply=user_text,
             previous_question=flow_state["last_question"],
             used_image_ids=flow_state["used_image_ids"],
+            next_step_hint=current_next_step_hint,
+            extra_image_hint=user_text,
         )
+        retry_payload["response"] = prepend_lesson_feedback(
+            retry_payload.get("response"),
+            "তোমার আগের উত্তর পুরোপুরি ঠিক হয়নি। আবার সহজভাবে দেখি।",
+        )
+        return retry_payload
 
     return teach_lesson_concept(
         llm=llm,
@@ -1340,6 +1671,7 @@ def run_lesson_flow_chat(
         concept=current_concept,
         chat_model=chat_model,
         used_image_ids=flow_state["used_image_ids"],
+        next_step_hint=current_next_step_hint,
     )
 
 
@@ -1400,6 +1732,8 @@ def run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_catalog, hist
         response_text=response_markdown,
         chat_model=chat_model,
     )
+    response_markdown = append_image_descriptions_to_response(response_markdown, response_images)
+    response_markdown = apply_image_reference_policy(response_markdown, response_images)
 
     return {
         "response": response_markdown,
