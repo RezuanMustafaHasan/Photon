@@ -1,5 +1,7 @@
 import json
 import os
+from functools import lru_cache
+from time import perf_counter
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -23,11 +25,11 @@ def load_env_file(env_path):
                 key, value = line.split("=", 1)
                 key = key.strip()
                 value = value.strip().strip('"').strip("'")
-                if key and key not in os.environ:
+                if key:
                     os.environ[key] = value
         return
 
-    load_dotenv(env_path)
+    load_dotenv(env_path, override=True)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -50,6 +52,7 @@ MAIN_COLLECTION = "main_book"
 MAIN_DOC_ID = "main_book"
 QUESTION_COUNT_MIN = 1
 QUESTION_COUNT_MAX = 50
+CHAT_TIMING_LOGS_ENABLED = str(os.getenv("CHAT_TIMING_LOGS", "true")).strip().lower() not in {"0", "false", "no", "off"}
 
 
 class ChatRequest(BaseModel):
@@ -58,6 +61,7 @@ class ChatRequest(BaseModel):
     chapter_name: str
     lesson_name: str
     history_mode: str = "default"
+    chat_model: str | None = None
 
 
 class ChatCitation(BaseModel):
@@ -74,6 +78,7 @@ class ChatThreadRequest(BaseModel):
 
 
 class ChatImage(BaseModel):
+    image_id: str = ""
     imageURL: str
     description: str = ""
     topic: list[str] = Field(default_factory=list)
@@ -157,6 +162,11 @@ class ExamAnalyzeResponse(BaseModel):
     summary: ExamSummary
 
 
+def log_chat_timing(message):
+    if CHAT_TIMING_LOGS_ENABLED:
+        print(message, flush=True)
+
+
 @app.get("/")
 def root():
     return {"status": "ok"}
@@ -164,44 +174,62 @@ def root():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest):
+    request_started = perf_counter()
+    log_chat_timing(
+        f"[chat] fastapi start user={payload.user_id} chapter={payload.chapter_name} lesson={payload.lesson_name} model={payload.chat_model or 'default'}"
+    )
+
     log_path = os.path.join(os.path.dirname(__file__), "incoming_requests.txt")
     with open(log_path, "a", encoding="utf-8") as log_file:
         log_file.write(f"Incoming request: {payload.json()}\n")
     if not payload.message or not payload.user_id or not payload.chapter_name or not payload.lesson_name:
         raise HTTPException(status_code=400, detail="message, user_id, chapter_name, lesson_name are required")
 
+    stage_started = perf_counter()
     lesson = load_lesson(payload.chapter_name, payload.lesson_name)
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
+    lesson_lookup_ms = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     chat_record = load_chat_record(payload.user_id, payload.chapter_name, payload.lesson_name)
     history = chat_record["history"]
     saved_thread_state = chat_record["thread_state"]
-    lesson_text = str(lesson.get("content") or "").strip()
+    history_lookup_ms = (perf_counter() - stage_started) * 1000
+
+    lesson_text = extract_lesson_content_text(lesson)
     if not lesson_text:
         raise HTTPException(status_code=404, detail="Lesson content not found")
     lesson_label = get_lesson_label(lesson, payload.lesson_name)
+
+    stage_started = perf_counter()
     lesson_catalog = load_chapter_lesson_catalog(payload.chapter_name, lesson_label)
+    catalog_lookup_ms = (perf_counter() - stage_started) * 1000
     thread_id = f"{payload.user_id}:{payload.chapter_name}:{payload.lesson_name}"
+
+    stage_started = perf_counter()
     try:
         response_payload = run_chat(
             thread_id=thread_id,
             chapter_name=payload.chapter_name,
             lesson_name=lesson_label,
-            lesson_source=lesson_text,
+            lesson_source=lesson,
             history=history,
             user_text=payload.message,
             saved_thread_state=saved_thread_state,
             lesson_catalog=lesson_catalog,
+            chat_model=payload.chat_model,
         )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+    run_chat_ms = (perf_counter() - stage_started) * 1000
 
     response_text = str(response_payload.get("response") or "")
     response_images = response_payload.get("images") or []
     thread_state = response_payload.get("thread_state") or {}
     textbook_answer = str(response_payload.get("textbook_answer") or "")
     extra_explanation = str(response_payload.get("extra_explanation") or "")
+    check_question = str(response_payload.get("check_question") or "")
     citations = response_payload.get("citations") or []
     if not isinstance(response_images, list):
         response_images = []
@@ -216,9 +244,12 @@ async def chat(payload: ChatRequest):
         "extra_explanation": extra_explanation,
         "citations": citations if isinstance(citations, list) else [],
     }
+    if check_question:
+        assistant_entry["check_question"] = check_question
     if response_images:
         assistant_entry["images"] = response_images
 
+    stage_started = perf_counter()
     history.append(assistant_entry)
     save_chat_thread(
         payload.user_id,
@@ -227,6 +258,20 @@ async def chat(payload: ChatRequest):
         history,
         thread_state,
     )
+    save_history_ms = (perf_counter() - stage_started) * 1000
+
+    total_ms = (perf_counter() - request_started) * 1000
+    log_chat_timing(
+        "[chat] fastapi done "
+        f"user={payload.user_id} lesson={lesson_label} "
+        f"total_ms={total_ms:.1f} "
+        f"lesson_lookup_ms={lesson_lookup_ms:.1f} "
+        f"history_lookup_ms={history_lookup_ms:.1f} "
+        f"catalog_lookup_ms={catalog_lookup_ms:.1f} "
+        f"run_chat_ms={run_chat_ms:.1f} "
+        f"save_history_ms={save_history_ms:.1f}"
+    )
+
     return ChatResponse(
         response=response_text,
         images=response_images,
@@ -309,6 +354,29 @@ def normalize_title(value):
     return str(value or "").strip().lower()
 
 
+def extract_lesson_content_text(lesson):
+    if not isinstance(lesson, dict):
+        return ""
+
+    content = str(lesson.get("content") or lesson.get("lesson_text") or lesson.get("text") or "").strip()
+    if content:
+        return content
+
+    parts = []
+    for topic in lesson.get("topics") or []:
+        if not isinstance(topic, dict):
+            continue
+        title = str(topic.get("title") or topic.get("topic_title") or topic.get("name") or "").strip()
+        topic_content = str(topic.get("content") or topic.get("text") or "").strip()
+        if title:
+            parts.append(title)
+        if topic_content:
+            parts.append(topic_content)
+
+    return "\n\n".join(parts).strip()
+
+
+@lru_cache(maxsize=1)
 def get_main_items():
     doc = db[MAIN_COLLECTION].find_one({"_id": MAIN_DOC_ID}) or {}
     items = doc.get("items") or []
@@ -352,13 +420,29 @@ def find_lesson(source, lesson_name):
     return None
 
 
-def load_lesson(chapter_name, lesson_name):
+@lru_cache(maxsize=128)
+def _load_chapter_source_cached(chapter_key):
     items = get_main_items()
-    match = find_chapter_item(items, chapter_name)
+    match = find_chapter_item(items, chapter_key)
     if not match:
         return None
-    source = get_chapter_source(match)
-    return find_lesson(source, lesson_name)
+    return get_chapter_source(match)
+
+
+def load_lesson(chapter_name, lesson_name):
+    chapter_key = normalize_title(chapter_name)
+    lesson_key = normalize_title(lesson_name)
+    if not chapter_key or not lesson_key:
+        return None
+    return _load_lesson_cached(chapter_key, lesson_key)
+
+
+@lru_cache(maxsize=512)
+def _load_lesson_cached(chapter_key, lesson_key):
+    source = _load_chapter_source_cached(chapter_key)
+    if not source:
+        return None
+    return find_lesson(source, lesson_key)
 
 
 def load_lesson_images(chapter_name, lesson_name):
@@ -374,11 +458,10 @@ configure_image_loader(load_lesson_images)
 
 
 def load_chapter_source(chapter_name):
-    items = get_main_items()
-    match = find_chapter_item(items, chapter_name)
-    if not match:
+    chapter_key = normalize_title(chapter_name)
+    if not chapter_key:
         return None
-    return get_chapter_source(match)
+    return _load_chapter_source_cached(chapter_key)
 
 
 def sanitize_exam_selections(raw_selections):
@@ -418,7 +501,7 @@ def get_lesson_label(lesson, fallback):
 
 
 def build_chat_lesson_entry(chapter_name, lesson, fallback):
-    content = str(lesson.get("content") or "").strip()
+    content = extract_lesson_content_text(lesson)
     if not content:
         return None
 
@@ -429,25 +512,41 @@ def build_chat_lesson_entry(chapter_name, lesson, fallback):
     }
 
 
-def load_chapter_lesson_catalog(chapter_name, current_lesson_name):
-    source = load_chapter_source(chapter_name)
+@lru_cache(maxsize=128)
+def _load_chapter_lesson_catalog_cached(chapter_key):
+    source = _load_chapter_source_cached(chapter_key)
     if not source:
         return []
 
     entries = []
-    current_match = None
     lessons = source.get("lessons") if isinstance(source, dict) else None
     if not isinstance(lessons, list):
         return entries
 
-    target_key = normalize_title(current_lesson_name)
     for lesson in lessons:
-        lesson_label = get_lesson_label(lesson, current_lesson_name)
-        entry = build_chat_lesson_entry(chapter_name, lesson, lesson_label)
-        if not entry:
-            continue
-        entries.append(entry)
-        if normalize_title(lesson_label) == target_key:
+        lesson_label = get_lesson_label(lesson, "")
+        entry = build_chat_lesson_entry(
+            source.get("chapter_name") or source.get("chapter_name_bn") or chapter_key,
+            lesson,
+            lesson_label,
+        )
+        if entry:
+            entries.append(entry)
+
+    return entries
+
+
+def load_chapter_lesson_catalog(chapter_name, current_lesson_name):
+    chapter_key = normalize_title(chapter_name)
+    if not chapter_key:
+        return []
+
+    entries = list(_load_chapter_lesson_catalog_cached(chapter_key))
+    current_match = None
+    target_key = normalize_title(current_lesson_name)
+
+    for entry in entries:
+        if normalize_title(entry["lesson_name"]) == target_key:
             current_match = entry
 
     if current_match:
@@ -481,7 +580,7 @@ def load_selected_lessons(selections):
                 missing_entries.append(f"Topic not found: {chapter_name} / {topic_name}")
                 continue
 
-            content = str(lesson.get("content") or "").strip()
+            content = extract_lesson_content_text(lesson)
             if not content:
                 missing_entries.append(f"Topic content not found: {chapter_name} / {topic_name}")
                 continue

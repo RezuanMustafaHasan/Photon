@@ -1,16 +1,17 @@
-Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা"}
-Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"negative","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"voltage of both point is equal","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"height is equal","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"kom bivober dike","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"তাপমাত্রার পার্থক্য","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"na","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"পৃথিবী থেকে","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"start. \nExplain using images for better understanding","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"B er dike","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
-Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"তড়িৎক্ষেত্রের “দিক” ও “প্রভাবের বিস্তার” বোঝাতে","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"bivob ki?","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"বিভব কি ?","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"কম","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"বিপরীত দিকে","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"বেশি","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"বাহিরে","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"+ থেকে - এ","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"0 hoy.","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"কারন উভয় আধান এর মান সমান","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"তড়িৎ বলরেখার ধারণা আমাদের তড়িৎক্ষেত্রের দিকনির্দেশ ও প্রভাবের ধরন বুঝতে সাহায্য করে.\nতড়িৎ বলরেখা কি বাস্তব কোন রেখা?","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"force er dik","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"তড়িৎক্ষেত্রের দিক","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"sporshok er dikei hobe","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}

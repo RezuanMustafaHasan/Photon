@@ -23,6 +23,9 @@ const ChatWindow = ({
   setMessages,
   chapterName,
   lessonName,
+  chatModel,
+  chatModelOptions,
+  onChatModelChange,
   rateLimitNotice,
   setRateLimitNotice,
   onSourceClick,
@@ -105,6 +108,7 @@ const ChatWindow = ({
           message: text,
           chapterName,
           lessonName,
+          chatModel,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -198,21 +202,39 @@ const ChatWindow = ({
     <div className="d-flex flex-column h-100 bg-background position-relative">
       <div className="px-4 px-md-5 px-lg-5 pt-4 pb-2">
         <div
-          className="container-sm mw-100 d-flex align-items-center justify-content-between gap-3"
+          className="container-sm mw-100 d-flex align-items-center justify-content-between gap-3 flex-wrap"
           style={{ maxWidth: '48rem' }}
         >
           <div className="min-w-0">
             <div className="small text-secondary">Lesson chat</div>
             <div className="fw-semibold text-primary text-truncate">{lessonName || 'Select a lesson'}</div>
           </div>
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-danger flex-shrink-0"
-            onClick={clearChatHistory}
-            disabled={!canClear}
-          >
-            {isClearing ? 'Deleting…' : 'Clear chat'}
-          </button>
+          <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+            <label className="small text-secondary d-flex align-items-center gap-2 mb-0">
+              <span>Model</span>
+              <select
+                value={chatModel}
+                onChange={(e) => onChatModelChange(e.target.value)}
+                disabled={isSending || isClearing}
+                className="form-select form-select-sm"
+                style={{ minWidth: '14rem' }}
+              >
+                {chatModelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger flex-shrink-0"
+              onClick={clearChatHistory}
+              disabled={!canClear}
+            >
+              {isClearing ? 'Deleting…' : 'Clear chat'}
+            </button>
+          </div>
         </div>
       </div>
 

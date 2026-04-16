@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from graph.exam_generator import extract_json_text, extract_text_content, get_exam_llm, normalize_error_message
+from graph.llm_logging import invoke_llm_with_logging
 
 
 ANALYSIS_SYSTEM_PROMPT = (
@@ -59,13 +60,20 @@ def analyze_exam_attempt(payload, SummaryModel):
 
     payload_json = json.dumps(payload, ensure_ascii=False)
     prompt = build_exam_analysis_prompt(payload_json)
+    messages = [
+        SystemMessage(content=ANALYSIS_SYSTEM_PROMPT),
+        HumanMessage(content=prompt),
+    ]
 
     try:
-      response = llm.invoke(
-          [
-              SystemMessage(content=ANALYSIS_SYSTEM_PROMPT),
-              HumanMessage(content=prompt),
-          ]
+      response = invoke_llm_with_logging(
+          llm,
+          messages,
+          context="exam_analysis.analyze_exam_attempt",
+          metadata={
+              "selection_count": len(payload.get("selections") or []),
+              "question_count": payload.get("questionCount"),
+          },
       )
     except Exception as exc:
       raise ValueError(normalize_error_message(exc)) from exc

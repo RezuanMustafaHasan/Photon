@@ -235,3 +235,33 @@ test('chat controller forwards assistant-only history mode for source introducti
 
   assert.equal(forwardedBody.history_mode, 'assistant_only');
 });
+
+test('chat controller forwards the selected chat model to the upstream service', async (t) => {
+  let forwardedBody = null;
+  global.fetch = async (_url, init) => {
+    forwardedBody = JSON.parse(init.body);
+    return createUpstreamResponse({
+      response: 'Model forwarded',
+      textbook_answer: 'Model forwarded',
+      extra_explanation: '',
+      citations: [],
+    });
+  };
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const app = createApp({
+    rateLimit: {
+      enabled: false,
+      redisClient: null,
+    },
+  });
+  const token = createToken('model-user');
+
+  await sendChat(app, token, 'spoofed-user', {
+    chatModel: 'openai:gpt-4.1-mini',
+  }).expect(200);
+
+  assert.equal(forwardedBody.chat_model, 'openai:gpt-4.1-mini');
+});

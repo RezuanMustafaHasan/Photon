@@ -126,6 +126,10 @@ export const chat = async (req, res) => {
   const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
   const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
   const historyMode = req.body?.historyMode === 'assistant_only' ? 'assistant_only' : 'default';
+  const chatModel = typeof req.body?.chatModel === 'string' ? req.body.chatModel.trim() : '';
+  const requestStartedAt = Date.now();
+
+  console.log(`[chat] backend start user=${userId} chapter=${chapterName} lesson=${lessonName}`);
 
   if (!message || !userId || !chapterName || !lessonName) {
     res.status(400).json({ message: 'message, chapterName, and lessonName are required' });
@@ -136,20 +140,31 @@ export const chat = async (req, res) => {
   const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
+    const upstreamStartedAt = Date.now();
+    console.log(`[chat] backend -> fastapi start user=${userId} lesson=${lessonName}`);
+
+    const upstreamPayload = {
+      message,
+      user_id: userId,
+      chapter_name: chapterName,
+      lesson_name: lessonName,
+      history_mode: historyMode,
+    };
+    if (chatModel) {
+      upstreamPayload.chat_model = chatModel;
+    }
+
     const upstream = await fetch(FASTAPI_CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        user_id: userId,
-        chapter_name: chapterName,
-        lesson_name: lessonName,
-        history_mode: historyMode,
-      }),
+      body: JSON.stringify(upstreamPayload),
       signal: controller.signal,
     });
 
     const data = await upstream.json().catch(() => null);
+    console.log(
+      `[chat] backend -> fastapi done user=${userId} lesson=${lessonName} status=${upstream.status} upstream_ms=${Date.now() - upstreamStartedAt} total_ms=${Date.now() - requestStartedAt}`,
+    );
     if (!upstream.ok) {
       res.status(502).json({ message: data?.detail || data?.message || 'Upstream error' });
       return;
@@ -171,6 +186,9 @@ export const chat = async (req, res) => {
 
     res.json(mapUpstreamChatResponse(data));
   } catch {
+    console.log(
+      `[chat] backend error user=${userId} lesson=${lessonName} total_ms=${Date.now() - requestStartedAt}`,
+    );
     res.status(502).json({ message: 'FastAPI is unreachable' });
   } finally {
     clearTimeout(timeoutId);

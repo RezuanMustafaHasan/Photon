@@ -5,6 +5,11 @@ import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { createRateLimitNotice, getRateLimitRemainingSeconds } from '../utils/rateLimit.js';
 import { createAssistantMessage, normalizeHistoryMessage } from '../utils/chatMessages.js';
+import {
+  CHAT_MODEL_OPTIONS,
+  DEFAULT_CHAT_MODEL,
+  normalizeChatModel,
+} from '../constants/chatModels.js';
 
 const createInitialMessages = () => ([
   {
@@ -47,6 +52,12 @@ const mapHistoryMessages = (history, { chapterName, lessonName }) => {
 const ChapterChat = ({ chapterTitle, onBack }) => {
   const { token, showRateLimitNotice } = useAuth();
   const [selectedLesson, setSelectedLesson] = useState('');
+  const [chatModel, setChatModel] = useState(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_CHAT_MODEL;
+    }
+    return normalizeChatModel(window.localStorage.getItem('photon_chat_model'));
+  });
   const [messagesByLesson, setMessagesByLesson] = useState({});
   const [rateLimitNotice, setRateLimitNotice] = useState(null);
   const lessonActivityRef = useRef({
@@ -73,6 +84,13 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
     const nextLesson = lesson || '';
     setSelectedLesson(nextLesson);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem('photon_chat_model', chatModel);
+  }, [chatModel]);
 
   const postLessonActivity = useCallback(async ({
     chapterName,
@@ -195,6 +213,7 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
           chapterName: chapterTitle,
           lessonName: targetLesson,
           historyMode: 'assistant_only',
+          chatModel,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -242,7 +261,7 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
         )),
       }));
     }
-  }, [chapterTitle, loadLessonHistory, messagesByLesson, showRateLimitNotice, token]);
+  }, [chapterTitle, chatModel, loadLessonHistory, messagesByLesson, showRateLimitNotice, token]);
 
   const pauseLessonTracking = useCallback(() => {
     const state = lessonActivityRef.current;
@@ -454,6 +473,9 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
              setMessages={setCurrentMessages}
              chapterName={chapterTitle}
              lessonName={selectedLesson}
+             chatModel={chatModel}
+             chatModelOptions={CHAT_MODEL_OPTIONS}
+             onChatModelChange={(nextModel) => setChatModel(normalizeChatModel(nextModel))}
              rateLimitNotice={rateLimitNotice}
              setRateLimitNotice={setRateLimitNotice}
              onSourceClick={handleSourceClick}
