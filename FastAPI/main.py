@@ -108,6 +108,7 @@ class ExamSelection(BaseModel):
 class ExamGenerateRequest(BaseModel):
     selections: list[ExamSelection]
     questionCount: int
+    exam_model: str | None = None
 
 
 class ExamQuestion(BaseModel):
@@ -156,6 +157,7 @@ class ExamAnalyzeRequest(BaseModel):
     percentage: int
     scoreComment: str
     wrongQuestions: list[WrongExamQuestion]
+    exam_model: str | None = None
 
 
 class ExamAnalyzeResponse(BaseModel):
@@ -312,12 +314,12 @@ async def generate_exam_route(payload: ExamGenerateRequest):
     if not selections:
         raise HTTPException(status_code=400, detail="At least one selected topic is required")
 
-    selected_lessons = load_selected_lessons(selections)
-    if not selected_lessons:
-        raise HTTPException(status_code=404, detail="Selected lessons were not found")
+    selected_topics = load_selected_exam_topics(selections)
+    if not selected_topics:
+        raise HTTPException(status_code=404, detail="Selected topics were not found")
 
     try:
-        questions = generate_exam(selected_lessons, payload.questionCount)
+        questions = generate_exam(selected_topics, payload.questionCount, payload.exam_model)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -343,7 +345,11 @@ async def analyze_exam_route(payload: ExamAnalyzeRequest):
         raise HTTPException(status_code=400, detail="All questions must be answered before analysis")
 
     try:
-        summary = analyze_exam_attempt(payload.model_dump(), ExamSummary)
+        summary = analyze_exam_attempt(
+            payload.model_dump(exclude={"exam_model"}),
+            ExamSummary,
+            payload.exam_model,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -561,9 +567,9 @@ def load_chapter_lesson_catalog(chapter_name, current_lesson_name):
     return entries
 
 
-def load_selected_lessons(selections):
+def load_selected_exam_topics(selections):
     items = get_main_items()
-    selected_lessons = []
+    selected_topics = []
     missing_entries = []
 
     for selection in selections:
@@ -580,23 +586,17 @@ def load_selected_lessons(selections):
                 missing_entries.append(f"Topic not found: {chapter_name} / {topic_name}")
                 continue
 
-            content = extract_lesson_content_text(lesson)
-            if not content:
-                missing_entries.append(f"Topic content not found: {chapter_name} / {topic_name}")
-                continue
-
-            selected_lessons.append(
+            selected_topics.append(
                 {
                     "chapter_name": chapter_name,
                     "topic_name": get_lesson_label(lesson, topic_name),
-                    "content": content,
                 }
             )
 
     if missing_entries:
         raise HTTPException(status_code=404, detail="; ".join(missing_entries))
 
-    return selected_lessons
+    return selected_topics
 
 
 def parse_user_id(user_id):

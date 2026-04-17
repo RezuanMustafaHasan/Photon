@@ -8,7 +8,6 @@ from typing import Any
 try:
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
     from langchain_core.tools import tool
-    from langchain_groq import ChatGroq
 except (ImportError, ModuleNotFoundError):
     class _BaseMessage:
         def __init__(self, content=None, **kwargs):
@@ -30,13 +29,6 @@ except (ImportError, ModuleNotFoundError):
 
         return decorator
 
-    class ChatGroq:
-        def __init__(self, *args, **kwargs):
-            del args, kwargs
-
-        def invoke(self, _messages):
-            raise RuntimeError("ChatGroq is unavailable")
-
 from graph.exam_generator import extract_json_text, normalize_error_message
 from graph.lesson_grounding import (
     chunk_lesson_content,
@@ -47,6 +39,15 @@ from graph.lesson_grounding import (
     truncate_text,
 )
 from graph.llm_logging import invoke_llm_with_logging
+from graph.model_config import (
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_CHAT_MODEL_CONFIG,
+    get_llm,
+    get_missing_chat_model_key_message,
+    parse_chat_model_config,
+    resolve_chat_model_config,
+    resolve_chat_model_id,
+)
 
 
 GROUNDING_SYSTEM_PROMPT = (
@@ -145,12 +146,6 @@ UNDERSTANDING_CHECK_SYSTEM_PROMPT = (
 IMAGE_TOOL_NAME = "fetch_lesson_image"
 MAX_HISTORY_ITEMS = 8
 IMAGE_REUSE_SCORE_THRESHOLD = 8
-DEFAULT_CHAT_MODEL = "groq:openai/gpt-oss-120b"
-DEFAULT_CHAT_MODEL_CONFIG = {
-    "id": DEFAULT_CHAT_MODEL,
-    "provider": "groq",
-    "model": "openai/gpt-oss-120b",
-}
 INVALID_JSON_BACKSLASH_PATTERN = re.compile(r'(?<!\\)\\(?!["\\/bfnrtu])')
 LATEX_COMMAND_BACKSLASH_PATTERN = re.compile(
     r"(?<!\\)\\(?=(?:frac|int|sum|sqrt|cdot|times|left|right|vec|hat|theta|phi|pi|alpha|beta|gamma|lambda|mu|nu|rho|sigma|omega|Delta|delta|tau|sin|cos|tan|text|mathrm|mathbf|pm|quad|qquad|leq|geq|neq|approx)\b)"
@@ -237,64 +232,6 @@ def configure_image_loader(loader):
 def delete_chat_thread(thread_id):
     del thread_id
     return True
-
-
-def parse_chat_model_config(selected_model=None):
-    requested = str(selected_model or "").strip()
-    if not requested:
-        return dict(DEFAULT_CHAT_MODEL_CONFIG)
-
-    provider = ""
-    model = ""
-    if ":" in requested:
-        provider, model = requested.split(":", 1)
-        provider = provider.strip().lower()
-        model = model.strip()
-
-    if provider in {"openai", "groq"} and model:
-        return {
-            "id": f"{provider}:{model}",
-            "provider": provider,
-            "model": model,
-        }
-
-    return dict(DEFAULT_CHAT_MODEL_CONFIG)
-
-
-def resolve_chat_model_id(selected_model=None):
-    return parse_chat_model_config(selected_model)["id"]
-
-
-def resolve_chat_model_config(selected_model=None):
-    return parse_chat_model_config(selected_model)
-
-
-def get_missing_chat_model_key_message(selected_model=None):
-    provider = resolve_chat_model_config(selected_model)["provider"]
-    if provider == "openai":
-        return "OPENAI_API_KEY is not set"
-    return "GROQ_API_KEY is not set"
-
-
-def get_llm(selected_model=None):
-    model_config = resolve_chat_model_config(selected_model)
-
-    if model_config["provider"] == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return None
-
-        try:
-            from langchain_openai import ChatOpenAI
-        except (ImportError, ModuleNotFoundError) as exc:
-            raise ValueError("langchain-openai is not installed") from exc
-
-        return ChatOpenAI(model=model_config["model"], api_key=api_key, temperature=0)
-
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        return None
-    return ChatGroq(model=model_config["model"], api_key=api_key, temperature=0)
 
 
 def extract_text_content(content):

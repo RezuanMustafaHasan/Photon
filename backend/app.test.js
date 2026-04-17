@@ -30,6 +30,20 @@ const sendChat = (app, token, userId = 'spoofed-user', extraBody = {}) => reques
     ...extraBody,
   });
 
+const sendGenerateExam = (app, token, extraBody = {}) => request(app)
+  .post('/api/exams/generate')
+  .set('Authorization', `Bearer ${token}`)
+  .send({
+    selections: [
+      {
+        chapterName: 'Static Electricity',
+        topicNames: ['তড়িৎ ক্ষেত্র'],
+      },
+    ],
+    questionCount: 5,
+    ...extraBody,
+  });
+
 test('chat limiter returns a consistent 429 payload and headers', async (t) => {
   global.fetch = async () => createUpstreamResponse();
   t.after(() => {
@@ -264,4 +278,56 @@ test('chat controller forwards the selected chat model to the upstream service',
   }).expect(200);
 
   assert.equal(forwardedBody.chat_model, 'openai:gpt-4.1-mini');
+});
+
+test('exam generate rejects invalid question counts before calling upstream', async () => {
+  const app = createApp({
+    rateLimit: {
+      enabled: false,
+      redisClient: null,
+    },
+  });
+  const token = createToken('exam-invalid-user');
+
+  const response = await sendGenerateExam(app, token, {
+    questionCount: 0,
+  }).expect(400);
+
+  assert.match(response.body.message, /questionCount must be an integer between/i);
+});
+
+test('exam controller forwards the selected exam model to the generation upstream service', async (t) => {
+  let forwardedBody = null;
+  global.fetch = async (_url, init) => {
+    forwardedBody = JSON.parse(init.body);
+    return createUpstreamResponse({
+      questions: [
+        {
+          id: 'q1',
+          chapterName: 'Static Electricity',
+          topicName: 'তড়িৎ ক্ষেত্র',
+          question: 'What is electric field?',
+          options: ['A', 'B', 'C', 'D'],
+          correctOptionIndex: 0,
+        },
+      ],
+    });
+  };
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const app = createApp({
+    rateLimit: {
+      enabled: false,
+      redisClient: null,
+    },
+  });
+  const token = createToken('exam-model-user');
+
+  await sendGenerateExam(app, token, {
+    examModel: 'openai:gpt-5.4-nano',
+  }).expect(200);
+
+  assert.equal(forwardedBody.exam_model, 'openai:gpt-5.4-nano');
 });

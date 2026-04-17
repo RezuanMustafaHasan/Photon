@@ -212,3 +212,73 @@ test('exam completion and chat confusion both feed lesson mastery signals', asyn
   assert.ok(response.body.weakConcepts.some((concept) => concept.lessonName === 'তড়িৎ ক্ষেত্র'));
   assert.equal(response.body.recommendedExam.chapterName, 'Static Electricity');
 });
+
+test('exam completion forwards the selected exam model to the analysis service', async (t) => {
+  const mongoServer = await connectMemoryDb([
+    { chapterName: 'Static Electricity', lessons: ['তড়িৎ ক্ষেত্র'] },
+  ]);
+  let forwardedBody = null;
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await disconnectMemoryDb(mongoServer);
+  });
+
+  global.fetch = async (url, init) => {
+    if (String(url).includes('/exam/analyze')) {
+      forwardedBody = JSON.parse(init.body);
+      return new Response(JSON.stringify({
+        summary: {
+          headline: 'Done',
+          overallComment: 'Done',
+          weaknesses: [],
+          recommendedTopics: [],
+          studyAdvice: [],
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    throw new Error(`Unexpected upstream URL: ${url}`);
+  };
+
+  const app = createApp({
+    rateLimit: {
+      enabled: false,
+      redisClient: null,
+    },
+  });
+  const token = createToken('507f1f77bcf86cd799439014');
+
+  await request(app)
+    .post('/api/exams/complete')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      selections: [
+        {
+          chapterName: 'Static Electricity',
+          topicNames: ['তড়িৎ ক্ষেত্র'],
+        },
+      ],
+      questionCount: 1,
+      questions: [
+        {
+          id: 'q1',
+          chapterName: 'Static Electricity',
+          topicName: 'তড়িৎ ক্ষেত্র',
+          question: 'What is electric field?',
+          options: ['A', 'B', 'C', 'D'],
+          correctOptionIndex: 1,
+        },
+      ],
+      answers: {
+        q1: 0,
+      },
+      examModel: 'openai:gpt-4.1-mini',
+    })
+    .expect(201);
+
+  assert.equal(forwardedBody.exam_model, 'openai:gpt-4.1-mini');
+});

@@ -6,6 +6,11 @@ import rehypeKatex from 'rehype-katex';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext.jsx';
+import {
+  CHAT_MODEL_OPTIONS,
+  DEFAULT_CHAT_MODEL,
+  normalizeChatModel,
+} from '../constants/chatModels.js';
 import { createRateLimitNotice } from '../utils/rateLimit.js';
 import { normalizeRichText } from '../utils/richText.js';
 
@@ -14,6 +19,7 @@ const MIN_QUESTION_COUNT = 1;
 const MAX_QUESTION_COUNT = 50;
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 const BANGLA_REGEX = /[\u0980-\u09FF]/;
+const EXAM_MODEL_STORAGE_KEY = 'photon_exam_model';
 
 const getBanglaClass = (value) => (BANGLA_REGEX.test(String(value || '')) ? 'font-bangla' : '');
 
@@ -172,6 +178,12 @@ const ExamPage = () => {
   const [questionCountMode, setQuestionCountMode] = useState('preset');
   const [questionCount, setQuestionCount] = useState(20);
   const [customQuestionCount, setCustomQuestionCount] = useState('20');
+  const [examModel, setExamModel] = useState(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_CHAT_MODEL;
+    }
+    return normalizeChatModel(window.localStorage.getItem(EXAM_MODEL_STORAGE_KEY));
+  });
   const [builderError, setBuilderError] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -295,6 +307,13 @@ const ExamPage = () => {
   useEffect(() => {
     fetchExamHistory();
   }, [fetchExamHistory]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(EXAM_MODEL_STORAGE_KEY, examModel);
+  }, [examModel]);
 
   useEffect(() => {
     if (!preselectedChapter) {
@@ -459,6 +478,7 @@ const ExamPage = () => {
             questionCount: activeAttempt.questionCount,
             questions: activeAttempt.questions,
             answers: activeAttempt.answers,
+            examModel: activeAttempt.examModel,
           }),
           signal: controller.signal,
         });
@@ -613,6 +633,7 @@ const ExamPage = () => {
         body: JSON.stringify({
           selections,
           questionCount: resolvedQuestionCount,
+          examModel,
         }),
       });
 
@@ -633,6 +654,7 @@ const ExamPage = () => {
       setActiveAttempt({
         selections,
         questionCount: resolvedQuestionCount,
+        examModel,
         questions: questions.map((question, index) => ({
           id: question.id || `${index + 1}`,
           chapterName: question.chapterName || '',
@@ -802,6 +824,27 @@ const ExamPage = () => {
                 </div>
               </div>
             )}
+
+            <div className="mb-4">
+              <label className="form-label small fw-semibold text-secondary text-uppercase">
+                Model
+              </label>
+              <select
+                value={examModel}
+                onChange={(event) => setExamModel(normalizeChatModel(event.target.value))}
+                disabled={isGenerating}
+                className="form-select border-gray-200 rounded-3 focus-ring-orange"
+              >
+                {CHAT_MODEL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <div className="small text-secondary mt-2">
+                Photon will use this model for both quiz generation and the post-exam AI summary.
+              </div>
+            </div>
 
             <div className="small fw-semibold text-secondary text-uppercase mb-2">Ready to generate</div>
             <div className="text-secondary mb-4">

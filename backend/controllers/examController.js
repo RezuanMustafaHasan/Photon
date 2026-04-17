@@ -17,6 +17,7 @@ const logBestEffortError = (label, error) => {
 };
 
 const normalizeTitle = (value) => String(value || '').trim().toLowerCase();
+const normalizeOptionalString = (value) => (typeof value === 'string' ? value.trim() : '');
 
 const sanitizeSelections = (rawSelections) => {
   if (!Array.isArray(rawSelections)) {
@@ -223,6 +224,7 @@ const formatAttemptDetail = (attempt) => ({
 export const generateExam = async (req, res) => {
   const questionCount = Number(req.body?.questionCount);
   const selections = sanitizeSelections(req.body?.selections);
+  const examModel = normalizeOptionalString(req.body?.examModel);
 
   if (!validateQuestionCount(questionCount)) {
     res.status(400).json({ message: `questionCount must be an integer between ${MIN_QUESTION_COUNT} and ${MAX_QUESTION_COUNT}.` });
@@ -241,7 +243,11 @@ export const generateExam = async (req, res) => {
     const upstream = await fetch(FASTAPI_EXAM_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selections, questionCount }),
+      body: JSON.stringify({
+        selections,
+        questionCount,
+        ...(examModel ? { exam_model: examModel } : {}),
+      }),
       signal: controller.signal,
     });
 
@@ -268,6 +274,7 @@ export const completeExam = async (req, res) => {
   const selections = sanitizeSelections(req.body?.selections);
   const questions = sanitizeQuestions(req.body?.questions);
   const answers = sanitizeAnswers(req.body?.answers);
+  const examModel = normalizeOptionalString(req.body?.examModel);
 
   if (!validateQuestionCount(questionCount)) {
     res.status(400).json({ message: `questionCount must be an integer between ${MIN_QUESTION_COUNT} and ${MAX_QUESTION_COUNT}.` });
@@ -314,6 +321,7 @@ export const completeExam = async (req, res) => {
           percentage,
           scoreComment,
           wrongQuestions,
+          ...(examModel ? { exam_model: examModel } : {}),
         }),
         signal: controller.signal,
       });
