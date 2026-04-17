@@ -15,3 +15,6 @@ Incoming request: {"message":"তড়িৎ বলরেখার ধারণ
 Incoming request: {"message":"force er dik","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
 Incoming request: {"message":"তড়িৎক্ষেত্রের দিক","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
 Incoming request: {"message":"sporshok er dikei hobe","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"dui bostur bivob shoman hoye jay","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"bivob","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}

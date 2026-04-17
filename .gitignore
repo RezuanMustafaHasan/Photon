@@ -53,7 +53,7 @@ dev-launch.sh
 .run-pids/
 .codex
 backend/util/.cph/
-**/incoming_requests.txt
+incoming_requests.txt
 FastAPI/llm_io.jsonl
 
 
