@@ -1,0 +1,207 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>simple_graph.py diagram</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true });
+  </script>
+</head>
+<body>
+  <pre class="mermaid">
+flowchart LR
+    fn_answer_lesson_flow_question["answer_lesson_flow_question"]
+    fn_append_image_descriptions_to_response["append_image_descriptions_to_response"]
+    fn_apply_image_reference_policy["apply_image_reference_policy"]
+    fn_assess_understanding_reply["assess_understanding_reply"]
+    fn_assistant_history_text["assistant_history_text"]
+    fn_build_catalog_entry["build_catalog_entry"]
+    fn_build_citations["build_citations"]
+    fn_build_grounded_prompt["build_grounded_prompt"]
+    fn_build_history_messages["build_history_messages"]
+    fn_build_image_id["build_image_id"]
+    fn_build_image_search_query["build_image_search_query"]
+    fn_build_lesson_completion_payload["build_lesson_completion_payload"]
+    fn_build_lesson_concepts["build_lesson_concepts"]
+    fn_build_lesson_flow_prompt["build_lesson_flow_prompt"]
+    fn_build_lesson_flow_question_prompt["build_lesson_flow_question_prompt"]
+    fn_build_next_step_hint["build_next_step_hint"]
+    fn_build_retrieval_query["build_retrieval_query"]
+    fn_call_llm_for_json["call_llm_for_json"]
+    fn_classify_understanding_reply["classify_understanding_reply"]
+    fn_clean_figure_hint["clean_figure_hint"]
+    fn_collapse_inline_whitespace["collapse_inline_whitespace"]
+    fn_compose_chat_markdown["compose_chat_markdown"]
+    fn_ensure_lesson_catalog["ensure_lesson_catalog"]
+    fn_extract_figure_hints["extract_figure_hints"]
+    fn_extract_lesson_text["extract_lesson_text"]
+    fn_extract_text_content["extract_text_content"]
+    fn_fallback_inline_image_description["fallback_inline_image_description"]
+    fn_find_best_lesson_image["find_best_lesson_image"]
+    fn_get_current_lesson_entry["get_current_lesson_entry"]
+    fn_get_llm["get_llm"]
+    fn_get_missing_chat_model_key_message["get_missing_chat_model_key_message"]
+    fn_is_student_question_in_lesson_flow["is_student_question_in_lesson_flow"]
+    fn_load_images_from_database["load_images_from_database"]
+    fn_manual_rewrite_image_description["manual_rewrite_image_description"]
+    fn_merge_used_image_ids["merge_used_image_ids"]
+    fn_normalize_grounded_text["normalize_grounded_text"]
+    fn_normalize_image_record["normalize_image_record"]
+    fn_normalize_joined_text["normalize_joined_text"]
+    fn_normalize_lesson_flow_state["normalize_lesson_flow_state"]
+    fn_normalize_text["normalize_text"]
+    fn_normalize_topics["normalize_topics"]
+    fn_normalize_used_image_ids["normalize_used_image_ids"]
+    fn_parse_chat_model_config["parse_chat_model_config"]
+    fn_parse_grounded_response["parse_grounded_response"]
+    fn_parse_json_from_text["parse_json_from_text"]
+    fn_parse_teaching_response["parse_teaching_response"]
+    fn_prepend_lesson_feedback["prepend_lesson_feedback"]
+    fn_remove_unrendered_image_references["remove_unrendered_image_references"]
+    fn_repair_invalid_json_backslashes["repair_invalid_json_backslashes"]
+    fn_resolve_chat_model_config["resolve_chat_model_config"]
+    fn_resolve_chat_model_id["resolve_chat_model_id"]
+    fn_resolve_images_for_response["resolve_images_for_response"]
+    fn_rewrite_image_description_for_display["rewrite_image_description_for_display"]
+    fn_romanized_keyword_match["romanized_keyword_match"]
+    fn_run_chat["run_chat"]
+    fn_run_grounded_chat["run_grounded_chat"]
+    fn_run_lesson_flow_chat["run_lesson_flow_chat"]
+    fn_safe_int["safe_int"]
+    fn_score_image_relevance["score_image_relevance"]
+    fn_select_images_for_concept["select_images_for_concept"]
+    fn_select_images_for_reply["select_images_for_reply"]
+    fn_short_non_negative_reply["short_non_negative_reply"]
+    fn_strip_diagram_serial_numbers["strip_diagram_serial_numbers"]
+    fn_strip_topic_numbering["strip_topic_numbering"]
+    fn_teach_lesson_concept["teach_lesson_concept"]
+    fn_tokenize["tokenize"]
+    fn_answer_lesson_flow_question --> fn_append_image_descriptions_to_response
+    fn_answer_lesson_flow_question --> fn_apply_image_reference_policy
+    fn_answer_lesson_flow_question --> fn_build_lesson_flow_question_prompt
+    fn_answer_lesson_flow_question --> fn_compose_chat_markdown
+    fn_answer_lesson_flow_question --> fn_merge_used_image_ids
+    fn_answer_lesson_flow_question --> fn_parse_teaching_response
+    fn_answer_lesson_flow_question --> fn_resolve_chat_model_id
+    fn_answer_lesson_flow_question --> fn_resolve_images_for_response
+    fn_answer_lesson_flow_question --> fn_safe_int
+    fn_answer_lesson_flow_question --> fn_select_images_for_concept
+    fn_append_image_descriptions_to_response --> fn_normalize_grounded_text
+    fn_append_image_descriptions_to_response --> fn_normalize_text
+    fn_apply_image_reference_policy --> fn_normalize_grounded_text
+    fn_apply_image_reference_policy --> fn_remove_unrendered_image_references
+    fn_assess_understanding_reply --> fn_call_llm_for_json
+    fn_assess_understanding_reply --> fn_classify_understanding_reply
+    fn_assess_understanding_reply --> fn_romanized_keyword_match
+    fn_assess_understanding_reply --> fn_short_non_negative_reply
+    fn_assistant_history_text --> fn_compose_chat_markdown
+    fn_build_catalog_entry --> fn_extract_lesson_text
+    fn_build_history_messages --> fn_assistant_history_text
+    fn_build_image_id --> fn_normalize_topics
+    fn_build_lesson_completion_payload --> fn_normalize_used_image_ids
+    fn_build_lesson_concepts --> fn_get_current_lesson_entry
+    fn_build_lesson_concepts --> fn_strip_topic_numbering
+    fn_build_lesson_flow_prompt --> fn_extract_figure_hints
+    fn_build_lesson_flow_prompt --> fn_strip_topic_numbering
+    fn_build_lesson_flow_question_prompt --> fn_strip_topic_numbering
+    fn_build_next_step_hint --> fn_strip_topic_numbering
+    fn_build_retrieval_query --> fn_assistant_history_text
+    fn_call_llm_for_json --> fn_extract_text_content
+    fn_call_llm_for_json --> fn_parse_json_from_text
+    fn_classify_understanding_reply --> fn_normalize_joined_text
+    fn_classify_understanding_reply --> fn_normalize_text
+    fn_clean_figure_hint --> fn_collapse_inline_whitespace
+    fn_clean_figure_hint --> fn_strip_diagram_serial_numbers
+    fn_clean_figure_hint --> fn_strip_topic_numbering
+    fn_compose_chat_markdown --> fn_normalize_grounded_text
+    fn_compose_chat_markdown --> fn_strip_diagram_serial_numbers
+    fn_ensure_lesson_catalog --> fn_build_catalog_entry
+    fn_extract_figure_hints --> fn_clean_figure_hint
+    fn_extract_figure_hints --> fn_normalize_grounded_text
+    fn_find_best_lesson_image --> fn_load_images_from_database
+    fn_find_best_lesson_image --> fn_score_image_relevance
+    fn_get_llm --> fn_resolve_chat_model_config
+    fn_get_missing_chat_model_key_message --> fn_resolve_chat_model_config
+    fn_is_student_question_in_lesson_flow --> fn_normalize_joined_text
+    fn_is_student_question_in_lesson_flow --> fn_normalize_text
+    fn_is_student_question_in_lesson_flow --> fn_tokenize
+    fn_load_images_from_database --> fn_normalize_image_record
+    fn_manual_rewrite_image_description --> fn_fallback_inline_image_description
+    fn_merge_used_image_ids --> fn_normalize_used_image_ids
+    fn_normalize_image_record --> fn_build_image_id
+    fn_normalize_image_record --> fn_normalize_topics
+    fn_normalize_joined_text --> fn_normalize_text
+    fn_normalize_lesson_flow_state --> fn_normalize_used_image_ids
+    fn_normalize_lesson_flow_state --> fn_safe_int
+    fn_parse_grounded_response --> fn_extract_text_content
+    fn_parse_grounded_response --> fn_normalize_grounded_text
+    fn_parse_grounded_response --> fn_repair_invalid_json_backslashes
+    fn_parse_teaching_response --> fn_extract_text_content
+    fn_parse_teaching_response --> fn_normalize_grounded_text
+    fn_parse_teaching_response --> fn_repair_invalid_json_backslashes
+    fn_prepend_lesson_feedback --> fn_normalize_grounded_text
+    fn_resolve_chat_model_config --> fn_parse_chat_model_config
+    fn_resolve_chat_model_id --> fn_parse_chat_model_config
+    fn_resolve_images_for_response --> fn_fallback_inline_image_description
+    fn_resolve_images_for_response --> fn_get_llm
+    fn_resolve_images_for_response --> fn_load_images_from_database
+    fn_resolve_images_for_response --> fn_manual_rewrite_image_description
+    fn_resolve_images_for_response --> fn_normalize_topics
+    fn_resolve_images_for_response --> fn_rewrite_image_description_for_display
+    fn_rewrite_image_description_for_display --> fn_call_llm_for_json
+    fn_rewrite_image_description_for_display --> fn_normalize_text
+    fn_romanized_keyword_match --> fn_normalize_text
+    fn_run_chat --> fn_ensure_lesson_catalog
+    fn_run_chat --> fn_normalize_lesson_flow_state
+    fn_run_chat --> fn_run_grounded_chat
+    fn_run_chat --> fn_run_lesson_flow_chat
+    fn_run_grounded_chat --> fn_append_image_descriptions_to_response
+    fn_run_grounded_chat --> fn_apply_image_reference_policy
+    fn_run_grounded_chat --> fn_build_citations
+    fn_run_grounded_chat --> fn_build_grounded_prompt
+    fn_run_grounded_chat --> fn_build_history_messages
+    fn_run_grounded_chat --> fn_build_retrieval_query
+    fn_run_grounded_chat --> fn_compose_chat_markdown
+    fn_run_grounded_chat --> fn_get_llm
+    fn_run_grounded_chat --> fn_get_missing_chat_model_key_message
+    fn_run_grounded_chat --> fn_parse_grounded_response
+    fn_run_grounded_chat --> fn_resolve_chat_model_id
+    fn_run_grounded_chat --> fn_resolve_images_for_response
+    fn_run_grounded_chat --> fn_select_images_for_reply
+    fn_run_lesson_flow_chat --> fn_answer_lesson_flow_question
+    fn_run_lesson_flow_chat --> fn_assess_understanding_reply
+    fn_run_lesson_flow_chat --> fn_build_lesson_completion_payload
+    fn_run_lesson_flow_chat --> fn_build_lesson_concepts
+    fn_run_lesson_flow_chat --> fn_build_next_step_hint
+    fn_run_lesson_flow_chat --> fn_get_llm
+    fn_run_lesson_flow_chat --> fn_get_missing_chat_model_key_message
+    fn_run_lesson_flow_chat --> fn_is_student_question_in_lesson_flow
+    fn_run_lesson_flow_chat --> fn_normalize_lesson_flow_state
+    fn_run_lesson_flow_chat --> fn_prepend_lesson_feedback
+    fn_run_lesson_flow_chat --> fn_teach_lesson_concept
+    fn_score_image_relevance --> fn_normalize_text
+    fn_score_image_relevance --> fn_tokenize
+    fn_select_images_for_concept --> fn_extract_figure_hints
+    fn_select_images_for_concept --> fn_find_best_lesson_image
+    fn_select_images_for_concept --> fn_strip_topic_numbering
+    fn_select_images_for_reply --> fn_build_image_search_query
+    fn_select_images_for_reply --> fn_find_best_lesson_image
+    fn_short_non_negative_reply --> fn_normalize_text
+    fn_strip_topic_numbering --> fn_collapse_inline_whitespace
+    fn_teach_lesson_concept --> fn_append_image_descriptions_to_response
+    fn_teach_lesson_concept --> fn_apply_image_reference_policy
+    fn_teach_lesson_concept --> fn_build_lesson_flow_prompt
+    fn_teach_lesson_concept --> fn_compose_chat_markdown
+    fn_teach_lesson_concept --> fn_merge_used_image_ids
+    fn_teach_lesson_concept --> fn_parse_teaching_response
+    fn_teach_lesson_concept --> fn_resolve_chat_model_id
+    fn_teach_lesson_concept --> fn_resolve_images_for_response
+    fn_teach_lesson_concept --> fn_safe_int
+    fn_teach_lesson_concept --> fn_select_images_for_concept
+    fn_tokenize --> fn_normalize_text
+    class fn_run_chat entry
+    classDef entry fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+  </pre>
+</body>
+</html>
