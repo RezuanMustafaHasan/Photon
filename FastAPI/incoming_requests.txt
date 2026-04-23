@@ -42,3 +42,4 @@ Incoming request: {"message":"okay,,next","user_id":"69ea40d671b460926bbbd02e","
 Incoming request: {"message":"okay ,, what is next","user_id":"69ea40d671b460926bbbd02e","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
 Incoming request: {"message":"now show me all types of math problems  related to this topic","user_id":"69ea40d671b460926bbbd02e","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
 Incoming request: {"message":"give me a math question","user_id":"69ea40d671b460926bbbd02e","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
