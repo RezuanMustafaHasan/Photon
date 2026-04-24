@@ -41,9 +41,7 @@ from graph.exam_generator import extract_json_text, normalize_error_message
 from graph.lesson_grounding import (
     chunk_lesson_content,
     is_introductory_question,
-    lesson_source_label,
     normalize_lesson_key,
-    retrieve_relevant_lesson_chunks,
     truncate_text,
 )
 from graph.llm_logging import invoke_llm_with_logging
@@ -54,18 +52,15 @@ GROUNDING_SYSTEM_PROMPT = (
     "You must respond in valid JSON only, with no markdown fences.\n"
     "Return this exact schema:\n"
     "{\n"
-    '  "textbook_answer": "lesson-grounded answer",\n'
+    '  "textbook_answer": "direct study answer",\n'
     '  "extra_explanation": "optional extra explanation"\n'
     "}\n"
     "Rules:\n"
-    "- textbook_answer must use only the provided lesson chunks.\n"
-    "- If the question is not directly covered by the lesson chunks, say that clearly in textbook_answer.\n"
-    "- extra_explanation is optional, but when used it must be clearly lesson-adjacent intuition, example, or clarification.\n"
-    "- Do not secretly mix outside knowledge into textbook_answer.\n"
-    "- If the exact answer is not present in the lesson chunks but the question is still physics-related and relevant to the current chapter/topic, answer in extra_explanation using your own physics knowledge.\n"
-    "- Keep textbook_answer grounded to the lesson, but let extra_explanation be broader when it helps the student understand.\n"
-    "- If the student says things like start, begin, continue, পড়াও, শেখাও, or শুরু, treat that as a request to begin teaching the current lesson from the provided chunks.\n"
-    "- For lesson-start requests, do not say the request is unclear and do not ask the student to restate the question.\n"
+    "- Answer the student's study question naturally using the conversation context and your physics knowledge.\n"
+    "- Do not pretend the answer is unavailable just because it is not exactly from the current lesson.\n"
+    "- If the question is related to study, physics, math, exams, or the current chapter, answer it directly first.\n"
+    "- Use the current chapter and lesson only as soft context; do not force the answer to stay inside that lesson.\n"
+    "- If the question is unrelated to study, reply briefly and steer back to study.\n"
     "- Write clean, readable paragraphs and markdown lists. Do not include the literal characters \\n in normal prose.\n"
     "- When you write formulas or symbols, always use Markdown math delimiters: inline $...$ and block $$...$$.\n"
     "- Because the response is JSON, escape every backslash inside LaTeX so JSON stays valid.\n"
@@ -86,15 +81,18 @@ LESSON_FLOW_SYSTEM_PROMPT = (
     "{\n"
     '  "textbook_answer": "markdown teaching explanation grounded in the provided topic text",\n'
     '  "extra_explanation": "optional intuition or analogy",\n'
-    '  "check_question": "one short conceptual question"\n'
+    '  "check_question": "one short check question or simple practice problem"\n'
     "}\n"
     "Rules:\n"
     "- Read the FULL topic content carefully before replying.\n"
     "- Use only the provided concept text.\n"
     "- Teach only this one topic. Do not jump to the next topic.\n"
-    "- Explain the topic in enough detail to genuinely teach it, not as a one-line summary.\n"
+    "- Keep each teaching turn compact: usually 120-180 words, unless a short derivation needs slightly more.\n"
+    "- Explain the topic enough to teach it, but do not dump the whole lesson in one turn.\n"
     "- Cover all important ideas present in the topic content. Do not skip key points.\n"
-    "- Teach naturally like a real tutor in conversation style. Do not dump a dry list of mini-topics.\n"
+    "- Teach naturally like a real tutor: use a short example, ask the student to notice patterns, and keep the lesson moving.\n"
+    "- Do not dump a dry list of mini-topics.\n"
+    "- If re-explaining, point out the exact misconception first, then use a different example or angle.\n"
     "- Use markdown structure, not plain text only.\n"
     "- Start textbook_answer with a short markdown heading for the current topic.\n"
     "- Use short bullets where they help clarity.\n"
@@ -103,9 +101,13 @@ LESSON_FLOW_SYSTEM_PROMPT = (
     "- Use simple Bangla-friendly language.\n"
     "- Use simplified examples or analogies when they help understanding.\n"
     "- Do not mention topic or lesson serial numbers like 2.6, 3.2, etc. Start directly with the idea.\n"
-    "- End each turn with one short conceptual check question to verify understanding of this topic.\n"
-    "- check_question must be exactly one short conceptual question.\n"
-    "- Do not repeat same type of questions.\n"
+    "- End each turn with exactly one short check to verify understanding of this topic.\n"
+    "- The check_question value must not include prefixes like 'ছোট প্রশ্ন:' or 'Question:'.\n"
+    "- Do not ask two checks at once. For example, do not ask positive-charge and negative-charge direction in the same check.\n"
+    "- If the topic is mathematical, use a very simple unsolved numeric practice problem instead of only a theory question.\n"
+    "- If you give a practice problem, do not solve it in the same turn.\n"
+    "- Do not repeat the same type of check unless the student made a conceptual mistake.\n"
+    "- For electric potential direction questions, keep this rule consistent: positive charge moves from higher potential to lower potential, and negative charge moves the opposite way.\n"
     "- Bold the asked question\n"
     "- Do not say the request is unclear.\n"
     "- Never mention any figure or diagram serial number such as চিত্র 2.6 or Figure 3.1.\n"
@@ -119,15 +121,20 @@ LESSON_FLOW_QUESTION_SYSTEM_PROMPT = (
     "{\n"
     '  "textbook_answer": "direct answer in tutor style, tied back to the current lesson topic",\n'
     '  "extra_explanation": "optional broader physics explanation",\n'
-    '  "check_question": "one short conceptual question about the current lesson topic"\n'
+    '  "check_question": "one short check question or simple practice problem about the current lesson topic"\n'
     "}\n"
     "Rules:\n"
     "- Answer the student's question first, clearly and naturally.\n"
+    "- If the student asks for an example, analogy, or math problem, provide that first.\n"
+    "- If the student asks for a practice/math problem, give one short unsolved problem and at most one small hint. Do not include the final answer or solution steps.\n"
+    "- After answering, return to the pending lesson check instead of moving ahead.\n"
     "- Keep the lesson flow anchored to the current topic; do not jump ahead to the next topic.\n"
     "- If the exact answer is outside the current topic text or outside this lesson but still physics-related, answer it properly in extra_explanation and reconnect to the current topic.\n"
     "- If the question is non-physics, reply briefly and politely, then return to the current topic flow.\n"
     "- Use simple, student-friendly language and include equations/notation/proof steps when needed.\n"
-    "- check_question must be exactly one short conceptual question for the current topic.\n"
+    "- check_question must be exactly one short check for the current topic, with no prefix like 'ছোট প্রশ্ন:' or 'Question:'.\n"
+    "- Do not ask two checks at once.\n"
+    "- For electric potential direction questions, keep this rule consistent: positive charge moves from higher potential to lower potential, and negative charge moves the opposite way.\n"
     "- Never mention any figure or diagram serial number such as চিত্র 2.6 or Figure 3.1.\n"
     "- Do not say the request is unclear."
 )
@@ -146,7 +153,63 @@ UNDERSTANDING_CHECK_SYSTEM_PROMPT = (
 )
 IMAGE_TOOL_NAME = "fetch_lesson_image"
 MAX_HISTORY_ITEMS = 8
+MAX_LESSON_FLOW_CONCEPTS = 8
 IMAGE_REUSE_SCORE_THRESHOLD = 8
+VISUAL_IMAGE_KEYWORDS = {
+    "চিত্র",
+    "ছবি",
+    "রেখাচিত্র",
+    "গ্রাফ",
+    "ডায়াগ্রাম",
+    "ডায়াগ্রাম",
+    "বলরেখা",
+    "সার্কিট",
+    "লেন্স",
+    "রশ্মি",
+    "তরঙ্গ",
+    "image",
+    "picture",
+    "diagram",
+    "figure",
+    "graph",
+    "draw",
+    "sketch",
+    "circuit",
+    "lens",
+    "ray",
+    "wave",
+    "field line",
+    "free body",
+    "vector",
+}
+MATH_CONCEPT_KEYWORDS = {
+    "সূত্র",
+    "সমীকরণ",
+    "গাণিতিক",
+    "মান নির্ণ",
+    "হিসাব",
+    "প্রমাণ",
+    "derive",
+    "derivation",
+    "formula",
+    "equation",
+    "calculate",
+    "solve",
+}
+PRACTICE_REQUEST_KEYWORDS = {
+    "math",
+    "problem",
+    "practice",
+    "example",
+    "exercise",
+    "numerical",
+    "solve",
+    "অংক",
+    "গণিত",
+    "সমস্যা",
+    "উদাহরণ",
+    "অনুশীলন",
+}
 DEFAULT_CHAT_MODEL = "groq:openai/gpt-oss-120b"
 DEFAULT_CHAT_MODEL_CONFIG = {
     "id": DEFAULT_CHAT_MODEL,
@@ -159,6 +222,20 @@ LATEX_COMMAND_BACKSLASH_PATTERN = re.compile(
 )
 LITERAL_NEWLINE_PATTERN = re.compile(r"\\n(?![A-Za-z])")
 LITERAL_TAB_PATTERN = re.compile(r"\\t(?![A-Za-z])")
+LITERAL_ESCAPED_ANSWER_MARKER_PATTERN = re.compile(
+    r"\\\\+\s*(?=(?:উত্তর|সমাধান|Answer|Solution|Ans)\b)",
+    flags=re.IGNORECASE,
+)
+CHECK_QUESTION_PREFIX_PATTERN = re.compile(
+    r"^\s*(?:[*_`#\s]*)(?:(?:ছোট|চেক)\s*)?(?:প্রশ্ন|question|check)\s*[:：\-]\s*",
+    flags=re.IGNORECASE,
+)
+PRACTICE_ANSWER_SECTION_PATTERN = re.compile(
+    r"(?:^|\n)\s*(?:[*_`#\s]*)(?:উত্তর|সমাধান|answer|solution|ans)\s*[:：\-]",
+    flags=re.IGNORECASE,
+)
+POTENTIAL_VALUE_PATTERN = re.compile(r"([+\-]?\d+(?:\.\d+)?)\s*v\b", flags=re.IGNORECASE)
+BANGLA_DIGIT_TRANSLATION = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
 TOPIC_NUMBER_PREFIX_PATTERN = re.compile(r"^\s*[০-৯0-9]+(?:\s*[.\-:]\s*[০-৯0-9]+)*\s*[:।.-]?\s*")
 FIGURE_TITLE_PATTERN = re.compile(r"চিত্র(?:\s*[০-৯0-9]+(?:\.[০-৯0-9]+)*)?\s*[:：-]\s*([^\n\r]+)")
 FIGURE_LINE_PATTERN = re.compile(r"([^\n\r]*চিত্র[^\n\r]*)")
@@ -323,14 +400,139 @@ def tokenize(value):
     return set(re.findall(r"[a-z0-9\u0980-\u09ff]+", normalize_text(value)))
 
 
+def text_contains_any(value, phrases):
+    text = normalize_text(value)
+    return any(phrase in text for phrase in phrases)
+
+
+def needs_visual_image(*values):
+    return text_contains_any("\n".join(str(value or "") for value in values), VISUAL_IMAGE_KEYWORDS)
+
+
+def is_math_concept(concept):
+    text = f"{concept.get('section_label') or ''}\n{concept.get('chunk_text') or ''}"
+    return bool(re.search(r"[$=]|\\(?:frac|sqrt|sum|int)\b", text)) or text_contains_any(text, MATH_CONCEPT_KEYWORDS)
+
+
+def is_practice_request(value):
+    return text_contains_any(value, PRACTICE_REQUEST_KEYWORDS)
+
+
 def normalize_grounded_text(value):
     text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
     text = LITERAL_NEWLINE_PATTERN.sub("\n", text)
     text = LITERAL_TAB_PATTERN.sub(" ", text)
+    text = LITERAL_ESCAPED_ANSWER_MARKER_PATTERN.sub("\n", text)
+    text = fix_potential_direction_text(text)
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n[ \t]+", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def fix_potential_direction_text(value):
+    text = str(value or "")
+    fixes = [
+        (
+            "নিম্ন বিভবের দিকে ঋণাত্মক আধান",
+            "ঋণাত্মক আধান নিম্ন বিভব থেকে উচ্চ বিভবের দিকে",
+        ),
+        (
+            "কম বিভবের দিকে ঋণাত্মক আধান",
+            "ঋণাত্মক আধান কম বিভব থেকে বেশি বিভবের দিকে",
+        ),
+        (
+            "negative charge moves from higher potential to lower potential",
+            "negative charge moves from lower potential to higher potential",
+        ),
+        (
+            "electrons move from higher potential to lower potential",
+            "electrons move from lower potential to higher potential",
+        ),
+    ]
+    for wrong, right in fixes:
+        text = re.sub(re.escape(wrong), right, text, flags=re.IGNORECASE)
+    return text
+
+
+def normalize_check_question(value):
+    text = normalize_grounded_text(value)
+    text = re.sub(r"^\s*[-*]\s*", "", text).strip()
+    text = CHECK_QUESTION_PREFIX_PATTERN.sub("", text).strip()
+    text = re.sub(r"^\*\*(.*?)\*\*$", r"\1", text).strip()
+    text = text.strip("*_` ").strip()
+    return text
+
+
+def remove_practice_answer_sections(value):
+    text = normalize_grounded_text(value)
+    marker = PRACTICE_ANSWER_SECTION_PATTERN.search(text)
+    if marker:
+        text = text[: marker.start()].strip()
+    return text
+
+
+def build_practice_request_intro(concept):
+    concept_text = normalize_text(f"{concept.get('section_label') or ''}\n{concept.get('chunk_text') or ''}")
+    if "বিভব" in concept_text or "potential" in concept_text:
+        return (
+            "চলো একটি ছোট অনুশীলন করি। আগে নিজে চেষ্টা করো, তারপর তোমার উত্তর দেখে এগোব।",
+            "ইঙ্গিত: আগে কোন বিভবটি বেশি, সেটি চিহ্নিত করো; আধানের ধরনটাও খেয়াল করো।",
+        )
+    return (
+        "চলো একটি ছোট অনুশীলন করি। আগে নিজে চেষ্টা করো, তারপর তোমার উত্তর দেখে এগোব।",
+        "ইঙ্গিত: প্রশ্নে দেওয়া মান বা শর্ত থেকে কোন নিয়মটি লাগবে, সেটি আগে ধরো।",
+    )
+
+
+def check_question_type(question):
+    text = normalize_text(question)
+    if not text:
+        return ""
+    if any(token in text for token in ("কোন দিক", "দিকে", "প্রবাহিত হবে", "কোন ধরণের", "কোন ধরনের", "from", "to")) and any(
+        token in text for token in ("বিভব", "উচ্চ", "নিম্ন", "potential", "v")
+    ):
+        return "direction"
+    if any(token in text for token in ("নির্ভর", "চালক", "কারণে", "কিসের উপর", "depends", "driver")):
+        return "driver"
+    if any(token in text for token in ("থাম", "বন্ধ", "সমান", "stop", "equal")):
+        return "stop"
+    if any(token in text for token in ("তাপ", "তাপমাত্রা", "পানি", "তরল", "মুক্ততল", "analogy")):
+        return "analogy"
+    if any(token in text for token in ("সংজ্ঞা", "কী বোঝ", "কি বোঝ", "definition", "unit", "একক")):
+        return "definition"
+    return ""
+
+
+def check_question_candidates(concept):
+    concept_text = normalize_text(f"{concept.get('section_label') or ''}\n{concept.get('chunk_text') or ''}")
+    if "বিভব" in concept_text or "potential" in concept_text:
+        return [
+            ("driver", "আধান প্রবাহের দিক ঠিক করতে মোট আধান বেশি গুরুত্বপূর্ণ, নাকি বিভবের পার্থক্য?"),
+            ("stop", "দুই পরিবাহীর বিভব সমান হয়ে গেলে আধান প্রবাহ কেন থেমে যায়?"),
+            ("analogy", "তাপমাত্রা-তাপ প্রবাহের সঙ্গে বিভব-আধান প্রবাহের মিলটা এক বাক্যে বলো।"),
+            ("definition", "তড়িৎ বিভব বলতে এক কথায় কী বোঝায়?"),
+        ]
+    return [
+        ("driver", "এই অংশে পরিবর্তন বা প্রবাহ ঘটার মূল কারণটি কী?"),
+        ("definition", "এই ধারণাটিকে এক বাক্যে কীভাবে বলবে?"),
+    ]
+
+
+def avoid_repeated_check_question(check_question, concept, previous_question, allow_repeat=False):
+    cleaned_question = normalize_check_question(check_question)
+    if allow_repeat or not previous_question:
+        return cleaned_question
+
+    previous_type = check_question_type(previous_question)
+    current_type = check_question_type(cleaned_question)
+    if not previous_type or current_type != previous_type:
+        return cleaned_question
+
+    for candidate_type, candidate in check_question_candidates(concept):
+        if candidate_type != previous_type:
+            return candidate
+    return cleaned_question
 
 
 def strip_diagram_serial_numbers(value):
@@ -449,7 +651,7 @@ def merge_used_image_ids(existing, new_ids):
 def compose_chat_markdown(textbook_answer, extra_explanation, citations, check_question="", next_step_hint=""):
     textbook_answer = strip_diagram_serial_numbers(normalize_grounded_text(textbook_answer))
     extra_explanation = strip_diagram_serial_numbers(normalize_grounded_text(extra_explanation))
-    check_question = strip_diagram_serial_numbers(normalize_grounded_text(check_question))
+    check_question = strip_diagram_serial_numbers(normalize_check_question(check_question))
     next_step_hint = strip_diagram_serial_numbers(normalize_grounded_text(next_step_hint))
     del citations
 
@@ -504,73 +706,14 @@ def build_history_messages(history):
     return messages
 
 
-def build_retrieval_query(user_text, history):
-    user_text = str(user_text or "").strip()
-    if is_introductory_question(user_text):
-        return user_text
-
-    context_parts = [user_text]
-    recent_history = history[-4:] if isinstance(history, list) else []
-    for item in reversed(recent_history):
-        if not isinstance(item, dict):
-            continue
-        content = assistant_history_text(item) if item.get("role") == "assistant" else str(item.get("content") or "").strip()
-        if not content:
-            continue
-        context_parts.append(truncate_text(content, max_length=240))
-        if len(context_parts) >= 3:
-            break
-    return "\n".join(reversed([part for part in context_parts if part]))
-
-
-def build_grounded_prompt(chapter_name, lesson_name, user_text, retrieval):
-    retrieval_mode = retrieval.get("mode", "no_match")
-    chunks = retrieval.get("chunks") or []
-    source_lesson_name = retrieval.get("source_lesson_name") or lesson_name
-
-    if chunks:
-        formatted_chunks = []
-        for index, chunk in enumerate(chunks, start=1):
-            formatted_chunks.append(
-                (
-                    f"[Chunk {index}]\n"
-                    f"Lesson: {chunk.get('lesson_name')}\n"
-                    f"Section: {chunk.get('section_label')}\n"
-                    f"Text:\n{chunk.get('chunk_text')}"
-                )
-            )
-        context_block = "\n\n".join(formatted_chunks)
-    else:
-        context_block = "No directly relevant lesson chunk matched the question."
-
-    if retrieval_mode == "intro":
-        return (
-            f"Current lesson:\n"
-            f"- Chapter: {chapter_name}\n"
-            f"- Lesson: {lesson_name}\n"
-            f"- Best matching lesson: {source_lesson_name}\n"
-            f"- Retrieval mode: {retrieval_mode}\n\n"
-            "The student is asking to start or continue this lesson, not asking a specific question.\n"
-            "Use the retrieved lesson chunks below to begin teaching the current lesson naturally.\n"
-            "In textbook_answer, give a short lesson opening and explain the first important ideas from these chunks in simple, student-friendly language.\n"
-            "Do not say the request is unclear.\n"
-            "Keep textbook_answer grounded only in the retrieved lesson chunks.\n"
-            "Use extra_explanation only for a small intuition, analogy, or clarification if it helps.\n\n"
-            f"Retrieved lesson chunks:\n{context_block}\n\n"
-            f"Student message:\n{user_text}"
-        )
-
+def build_study_chat_prompt(chapter_name, lesson_name, user_text):
     return (
-        f"Current lesson:\n"
+        f"Current study context:\n"
         f"- Chapter: {chapter_name}\n"
-        f"- Lesson: {lesson_name}\n"
-        f"- Best matching lesson: {source_lesson_name}\n"
-        f"- Retrieval mode: {retrieval_mode}\n\n"
-        "Use the retrieved lesson chunks below for the grounded answer.\n"
-        "If the best matching lesson is not the current lesson, treat it as a nearby source lesson from the same chapter.\n"
-        "If the lesson does not directly cover the student's question, say that in textbook_answer and keep any broader help in extra_explanation.\n\n"
-        f"Retrieved lesson chunks:\n{context_block}\n\n"
-        f"Student question:\n{user_text}"
+        f"- Lesson: {lesson_name}\n\n"
+        "Answer the student's message naturally. Use the chapter/lesson only as helpful context, "
+        "not as a hard boundary.\n\n"
+        f"Student message:\n{user_text}"
     )
 
 
@@ -596,30 +739,6 @@ def parse_grounded_response(raw_content):
         "textbook_answer": textbook_answer,
         "extra_explanation": extra_explanation,
     }
-
-
-def build_citations(chapter_name, lesson_name, retrieval):
-    if retrieval.get("mode") not in {"matched", "intro"}:
-        return []
-
-    source_lesson_name = str(retrieval.get("source_lesson_name") or "").strip()
-    source_chapter_name = str(retrieval.get("source_chapter_name") or chapter_name).strip()
-    if not source_lesson_name:
-        return []
-
-    if normalize_lesson_key(source_lesson_name) == normalize_lesson_key(lesson_name):
-        return []
-
-    return [
-        {
-            "chapter_name": source_chapter_name or chapter_name,
-            "lesson_name": source_lesson_name,
-            "section_label": lesson_source_label(source_chapter_name or chapter_name, source_lesson_name),
-            "snippet": "",
-        }
-    ]
-
-
 def parse_teaching_response(raw_content):
     raw_output = extract_text_content(raw_content)
     json_text = repair_invalid_json_backslashes(extract_json_text(raw_output))
@@ -634,7 +753,7 @@ def parse_teaching_response(raw_content):
 
     textbook_answer = normalize_grounded_text(payload.get("textbook_answer") or "")
     extra_explanation = normalize_grounded_text(payload.get("extra_explanation") or "")
-    check_question = normalize_grounded_text(payload.get("check_question") or payload.get("question") or "")
+    check_question = normalize_check_question(payload.get("check_question") or payload.get("question") or "")
 
     if not textbook_answer:
         raise ValueError("The lesson flow payload must contain a textbook_answer.")
@@ -709,6 +828,41 @@ def get_current_lesson_entry(lesson_catalog, lesson_name):
     return entries[0] if entries else None
 
 
+def is_generic_chunk_label(value):
+    return bool(re.match(r"(?i)^(?:page\s+\d+|chunk\s+\d+|ধারণা\s+\d+)(?:\s*/.*)?$", str(value or "").strip()))
+
+
+def compact_group_label(labels, group_index):
+    cleaned = [strip_topic_numbering(label) for label in labels if str(label or "").strip()]
+    meaningful = [label for label in cleaned if label and not is_generic_chunk_label(label)]
+    if meaningful:
+        return meaningful[0]
+    return f"ধারণা {group_index}"
+
+
+def compact_lesson_flow_chunks(chunks, max_concepts=MAX_LESSON_FLOW_CONCEPTS):
+    valid_chunks = [
+        chunk for chunk in chunks
+        if isinstance(chunk, dict) and str(chunk.get("chunk_text") or "").strip()
+    ]
+    if len(valid_chunks) <= max_concepts:
+        return valid_chunks
+
+    groups = []
+    group_size = max(1, (len(valid_chunks) + max_concepts - 1) // max_concepts)
+    for start in range(0, len(valid_chunks), group_size):
+        current = valid_chunks[start:start + group_size]
+        labels = [item.get("section_label") for item in current]
+        groups.append(
+            {
+                "section_label": compact_group_label(labels, len(groups) + 1),
+                "chunk_text": "\n\n".join(str(item.get("chunk_text") or "").strip() for item in current).strip(),
+            }
+        )
+
+    return groups
+
+
 def build_lesson_concepts(lesson_catalog, lesson_name, lesson_source=None):
     if isinstance(lesson_source, dict) and isinstance(lesson_source.get("topics"), list):
         concepts = []
@@ -736,7 +890,8 @@ def build_lesson_concepts(lesson_catalog, lesson_name, lesson_source=None):
         return []
 
     concepts = []
-    for index, chunk in enumerate(chunk_lesson_content(lesson_entry.get("content")), start=1):
+    raw_chunks = compact_lesson_flow_chunks(chunk_lesson_content(lesson_entry.get("content")))
+    for index, chunk in enumerate(raw_chunks, start=1):
         chunk_text = str(chunk.get("chunk_text") or "").strip()
         if not chunk_text:
             continue
@@ -759,17 +914,23 @@ def build_lesson_flow_prompt(
     previous_question="",
     re_explain=False,
 ):
+    check_instruction = (
+        "End with one very simple unsolved numeric practice problem from this topic. Do not include its answer."
+        if is_math_concept(concept)
+        else "End with one short conceptual check question for this topic."
+    )
     action_line = (
-        "The student did not clearly show understanding yet. Re-explain the same topic more simply and more clearly, then ask one new short conceptual question."
+        "The student did not clearly show understanding yet. Re-explain the same topic more simply and more clearly, then give one focused check."
         if re_explain
-        else "Teach this topic clearly in natural tutor style, then ask one short conceptual question."
+        else "Teach this topic clearly in natural tutor style, then give one focused check."
     )
     follow_up_block = ""
-    if re_explain:
+    if previous_question:
         follow_up_block = (
             f"Previous check question:\n{previous_question}\n\n"
-            f"Student reply:\n{student_reply}\n\n"
         )
+    if re_explain:
+        follow_up_block += f"Student reply:\n{student_reply}\n\n"
 
     figure_hints = extract_figure_hints(concept.get("chunk_text"))
     figure_block = ""
@@ -783,12 +944,17 @@ def build_lesson_flow_prompt(
         f"Lesson: {lesson_name}\n"
         f"Topic title: {strip_topic_numbering(concept.get('section_label'))}\n\n"
         f"{action_line}\n"
-        "Give a solid teaching explanation for this topic in this turn.\n"
-        "Explain all important parts of this topic clearly, but do not move to the next topic.\n"
+        "Give a solid but compact teaching explanation for this topic in this turn.\n"
+        "Use at most two short paragraphs plus a few bullets only when they help.\n"
+        "Explain the important parts of this topic clearly, but do not move to the next topic.\n"
         "Do not dump a plain list of all lesson topics; keep it conversational and concept-focused.\n"
         "Use markdown headings and, when helpful, short bullets.\n"
         "If the topic includes equation, display it in a clear and readable format.\n"
         "If the topic includes notation, symbols, equations, definitions, or proof steps, include them clearly.\n"
+        f"{check_instruction}\n"
+        "The check_question field must contain only the check itself, without 'ছোট প্রশ্ন:' or similar prefixes.\n"
+        "Make the check one focused task only.\n"
+        "Avoid the same style as the previous check unless the student made a conceptual mistake.\n"
         "Do not repeat any lesson number or serial number such as 2.6 or 3.2.\n"
         "If a figure is mentioned in the source text, explain its idea in words only and do not mention any figure serial.\n\n"
         f"{follow_up_block}"
@@ -804,6 +970,20 @@ def build_lesson_flow_question_prompt(
     student_question,
     previous_question="",
 ):
+    if is_practice_request(student_question):
+        check_instruction = (
+            "The student is asking for practice. Give exactly one short unsolved practice problem tied to this topic. "
+            "You may add one short hint, but do not include the final answer, solution steps, or any line starting with উত্তর, Answer, or Solution. "
+            "Set check_question to exactly that same unsolved problem."
+        )
+    elif previous_question:
+        check_instruction = "After answering, repeat the previous check exactly so the student can answer it."
+    else:
+        check_instruction = (
+            "After answering, give one very simple numeric practice problem from this topic."
+            if is_math_concept(concept)
+            else "After answering, give one short conceptual check question for this topic."
+        )
     previous_block = ""
     if previous_question:
         previous_block = f"Previous check question:\n{previous_question}\n\n"
@@ -816,7 +996,8 @@ def build_lesson_flow_question_prompt(
         "Answer the question clearly first, then reconnect to this current topic.\n"
         "If the question is outside this lesson but physics-related, still answer it properly and then return to this topic flow.\n"
         "Do not move to the next topic yet.\n"
-        "Ask one short conceptual check question for this same current topic.\n\n"
+        f"{check_instruction}\n"
+        "Keep the reply compact and conversational.\n\n"
         f"{previous_block}"
         f"Current topic content:\n{concept.get('chunk_text')}\n\n"
         f"Student question:\n{student_question}"
@@ -827,16 +1008,69 @@ def normalize_joined_text(value):
     return re.sub(r"\s+", "", normalize_text(value))
 
 
+def contains_understanding_phrase(normalized_text, phrase):
+    phrase = normalize_text(phrase)
+    if not phrase:
+        return False
+    if re.fullmatch(r"[a-z0-9\u0980-\u09ff]+", phrase):
+        tokens = set(re.findall(r"[a-z0-9]+|[\u0980-\u09ff]+", normalized_text))
+        return phrase in tokens
+    return phrase in normalized_text
+
+
+def normalize_direction_text(value):
+    return normalize_joined_text(value).replace("_", "").replace("−", "-").replace("–", "-").replace("—", "-")
+
+
+def question_asks_negative_charge(question):
+    text = normalize_text(question)
+    asks_negative = any(token in text for token in ("ঋণাত্মক", "negative", "electron", "ইলেকট্রন"))
+    asks_positive = any(token in text for token in ("ধনাত্মক", "positive"))
+    return asks_negative and not asks_positive
+
+
+def normalize_potential_value_label(raw_number):
+    value_text = str(raw_number or "").strip()
+    if value_text.startswith("+"):
+        return f"+{value_text[1:]}v"
+    return f"{value_text}v"
+
+
+def potential_numeric_pair(question):
+    normalized = (
+        str(question or "")
+        .translate(BANGLA_DIGIT_TRANSLATION)
+        .replace("−", "-")
+        .replace("–", "-")
+        .replace("—", "-")
+    )
+    values = []
+    seen_labels = set()
+    for match in POTENTIAL_VALUE_PATTERN.finditer(normalized):
+        raw_number = match.group(1)
+        label = normalize_potential_value_label(raw_number)
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        try:
+            numeric_value = float(raw_number)
+        except ValueError:
+            continue
+        values.append((numeric_value, label))
+
+    if len(values) < 2:
+        return None
+
+    high_value, high_label = max(values, key=lambda item: item[0])
+    low_value, low_label = min(values, key=lambda item: item[0])
+    if high_value == low_value:
+        return None
+    return high_label, low_label
+
+
 def build_next_step_hint(concepts, concept_index):
-    if not isinstance(concepts, list) or not concepts:
-        return ""
-
-    next_index = concept_index + 1
-    if next_index >= len(concepts):
-        return "এই প্রশ্নের উত্তর ঠিক হলে lesson শেষ হবে।"
-
-    next_label = strip_topic_numbering(concepts[next_index].get("section_label") or f"ধাপ {next_index + 1}")
-    return f"তোমার উত্তর ঠিক হলে, এরপর আমরা {next_label} ব্যাখ্যা করব।"
+    del concepts, concept_index
+    return ""
 
 
 def is_student_question_in_lesson_flow(user_text):
@@ -865,12 +1099,20 @@ def is_student_question_in_lesson_flow(user_text):
         "why",
         "how",
         "what",
-        "which",
-        "when",
-        "where",
-        "explain",
-        "derive",
-        "proof",
+          "which",
+          "when",
+          "where",
+          "give",
+          "show",
+          "problem",
+          "practice",
+          "example",
+          "exercise",
+          "math",
+          "numerical",
+          "explain",
+          "derive",
+          "proof",
         "difference",
         "কেন",
         "কিভাবে",
@@ -879,10 +1121,28 @@ def is_student_question_in_lesson_flow(user_text):
         "কি",
         "কখন",
         "কোথায়",
-        "কোথায়",
-        "ব্যাখ্যা",
-        "প্রমাণ",
-    }
+          "কোথায়",
+          "দাও",
+          "দিন",
+          "দেখাও",
+          "বোঝাও",
+          "উদাহরণ",
+          "সমস্যা",
+          "অনুশীলন",
+          "অংক",
+          "গণিত",
+          "ব্যাখ্যা",
+          "প্রমাণ",
+          "চিত্র",
+          "ছবি",
+          "রেখাচিত্র",
+          "ডায়াগ্রাম",
+          "ডায়াগ্রাম",
+          "diagram",
+          "image",
+          "picture",
+          "graph",
+      }
     if tokens & question_tokens:
         return True
 
@@ -915,10 +1175,10 @@ def classify_understanding_reply(user_text):
         return False
 
     for phrase in POSITIVE_UNDERSTANDING_PHRASES:
-        if phrase and phrase in normalized:
+        if contains_understanding_phrase(normalized, phrase):
             return True
     for phrase in NEGATIVE_UNDERSTANDING_PHRASES:
-        if phrase and phrase in normalized:
+        if contains_understanding_phrase(normalized, phrase):
             return False
     return None
 
@@ -927,7 +1187,7 @@ def short_non_negative_reply(user_text):
     normalized = normalize_text(user_text)
     if not normalized:
         return False
-    if any(phrase in normalized for phrase in NEGATIVE_UNDERSTANDING_PHRASES):
+    if any(contains_understanding_phrase(normalized, phrase) for phrase in NEGATIVE_UNDERSTANDING_PHRASES):
         return False
     if "?" in user_text:
         return False
@@ -935,10 +1195,113 @@ def short_non_negative_reply(user_text):
     return 0 < token_count <= 4
 
 
+def potential_direction_pair(question):
+    numeric_pair = potential_numeric_pair(question)
+    if numeric_pair is not None:
+        return numeric_pair
+
+    text = normalize_direction_text(question)
+    comparisons = [
+        ("v1>v2", "v1", "v2"),
+        ("v2<v1", "v1", "v2"),
+        ("v1<v2", "v2", "v1"),
+        ("v2>v1", "v2", "v1"),
+        ("va>vb", "a", "b"),
+        ("vb<va", "a", "b"),
+        ("va<vb", "b", "a"),
+        ("vb>va", "b", "a"),
+    ]
+    for marker, high_label, low_label in comparisons:
+        if marker in text:
+            return high_label, low_label
+
+    first_low = re.search(r"প্রথম[^।,.]*বিভব[^।,.]*কম", text)
+    first_high = re.search(r"প্রথম[^।,.]*বিভব[^।,.]*বেশি", text)
+    other_high = re.search(r"(?:দ্বিতীয়|দ্বিতীয়|অন্য)[^।,.]*বিভব[^।,.]*বেশি", text)
+    other_low = re.search(r"(?:দ্বিতীয়|দ্বিতীয়|অন্য)[^।,.]*বিভব[^।,.]*কম", text)
+    if first_low and other_high:
+        return "v2", "v1"
+    if first_high and other_low:
+        return "v1", "v2"
+    return None
+
+
+def potential_label_aliases(label):
+    aliases = {
+        "v1": {"v1", "1", "প্রথম", "first"},
+        "v2": {"v2", "2", "দ্বিতীয়", "দ্বিতীয়", "second"},
+        "a": {"a", "va"},
+        "b": {"b", "vb"},
+    }
+    if label in aliases:
+        return aliases[label]
+
+    value_match = re.fullmatch(r"([+\-]?\d+(?:\.\d+)?)v", str(label or ""))
+    if value_match:
+        raw_number = value_match.group(1)
+        normalized_label = normalize_potential_value_label(raw_number)
+        plain_number = raw_number[1:] if raw_number.startswith("+") else raw_number
+        sign_variant = normalized_label.replace("-", "−")
+        return {normalized_label, sign_variant, f"{plain_number}v", plain_number}
+
+    return {label}
+
+
+def reply_has_direction(reply, source_label, target_label):
+    text = normalize_direction_text(reply)
+    separators = ("থেকে", "হতে", "theke", "to", "→", "->")
+    for source in potential_label_aliases(source_label):
+        for target in potential_label_aliases(target_label):
+            if any(f"{source}{separator}{target}" in text for separator in separators):
+                return True
+    return False
+
+
+def reply_mentions_label(reply, label):
+    text = normalize_direction_text(reply)
+    tokens = re.findall(r"[a-z0-9]+|[\u0980-\u09ff]+", normalize_text(reply).replace("_", ""))
+    token_set = set(tokens)
+    for alias in potential_label_aliases(label):
+        if alias in token_set or text == alias:
+            return True
+        if alias in {"প্রথম", "দ্বিতীয়", "দ্বিতীয়"} and alias in text:
+            return True
+    return False
+
+
+def assess_potential_direction_reply(previous_question, student_reply):
+    pair = potential_direction_pair(previous_question)
+    if pair is None:
+        return None
+
+    high_label, low_label = pair
+    expected_source, expected_target = (
+        (low_label, high_label)
+        if question_asks_negative_charge(previous_question)
+        else (high_label, low_label)
+    )
+    wrong_source, wrong_target = expected_target, expected_source
+
+    if reply_has_direction(student_reply, expected_source, expected_target):
+        return True
+    if reply_has_direction(student_reply, wrong_source, wrong_target):
+        return False
+
+    if reply_mentions_label(student_reply, expected_target) and not reply_mentions_label(student_reply, expected_source):
+        return True
+    if reply_mentions_label(student_reply, expected_source) and not reply_mentions_label(student_reply, expected_target):
+        return False
+    return None
+
+
 def assess_understanding_reply(llm, chapter_name, lesson_name, concept, previous_question, student_reply):
     heuristic = classify_understanding_reply(student_reply)
     if heuristic is not None:
         return heuristic
+
+    potential_direction = assess_potential_direction_reply(previous_question, student_reply)
+    if potential_direction is not None:
+        return potential_direction
 
     if romanized_keyword_match(student_reply, concept) and short_non_negative_reply(student_reply):
         return True
@@ -1301,7 +1664,10 @@ def ensure_lesson_catalog(chapter_name, lesson_name, lesson_source, lesson_catal
 
 def build_image_search_query(user_text, textbook_answer, extra_explanation, retrieval):
     parts = [str(user_text or "").strip(), str(textbook_answer or "").strip(), str(extra_explanation or "").strip()]
-    for chunk in retrieval.get("chunks") or []:
+    chunks = (retrieval.get("chunks") if isinstance(retrieval, dict) else []) or []
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
         chunk_text = str(chunk.get("chunk_text") or "").strip()
         if chunk_text:
             parts.append(truncate_text(chunk_text, max_length=220))
@@ -1318,6 +1684,11 @@ def select_images_for_reply(
     extra_explanation,
     retrieval,
 ):
+    chunks = (retrieval.get("chunks") if isinstance(retrieval, dict) else []) or []
+    chunk_text = "\n".join(str(chunk.get("chunk_text") or "") for chunk in chunks if isinstance(chunk, dict))
+    if not needs_visual_image(user_text, chunk_text):
+        return []
+
     query = build_image_search_query(user_text, textbook_answer, extra_explanation, retrieval)
     if not query:
         return []
@@ -1346,6 +1717,9 @@ def select_images_for_concept(
         )
         if image is not None:
             return [image]
+
+    if not needs_visual_image(extra_hint):
+        return []
 
     query_parts = [
         strip_topic_numbering(concept.get("section_label") or ""),
@@ -1432,11 +1806,17 @@ def teach_lesson_concept(
         raise ValueError(normalize_error_message(exc)) from exc
 
     parsed = parse_teaching_response(response.content)
+    check_question = avoid_repeated_check_question(
+        parsed["check_question"],
+        concept,
+        previous_question,
+        allow_repeat=re_explain,
+    )
     base_response_markdown = compose_chat_markdown(
         parsed["textbook_answer"],
         parsed["extra_explanation"],
         [],
-        check_question=parsed["check_question"],
+        check_question=check_question,
         next_step_hint=next_step_hint,
     )
     selected_images = select_images_for_concept(
@@ -1470,12 +1850,12 @@ def teach_lesson_concept(
             "current_step_index": max(0, safe_int(concept.get("concept_index"), 0)),
             "awaiting_understanding": True,
             "lesson_complete": False,
-            "last_question": parsed["check_question"],
+            "last_question": check_question,
             "used_image_ids": updated_used_image_ids,
         },
         "textbook_answer": parsed["textbook_answer"],
         "extra_explanation": parsed["extra_explanation"],
-        "check_question": parsed["check_question"],
+        "check_question": check_question,
         "next_hint": next_step_hint,
         "citations": [],
     }
@@ -1521,11 +1901,19 @@ def answer_lesson_flow_question(
         raise ValueError(normalize_error_message(exc)) from exc
 
     parsed = parse_teaching_response(response.content)
+    practice_request = is_practice_request(student_question)
+    if practice_request:
+        check_question = remove_practice_answer_sections(parsed["check_question"]) or parsed["check_question"]
+        textbook_answer, extra_explanation = build_practice_request_intro(concept)
+    else:
+        check_question = previous_question or parsed["check_question"]
+        textbook_answer = parsed["textbook_answer"]
+        extra_explanation = parsed["extra_explanation"]
     base_response_markdown = compose_chat_markdown(
-        parsed["textbook_answer"],
-        parsed["extra_explanation"],
+        textbook_answer,
+        extra_explanation,
         [],
-        check_question=parsed["check_question"],
+        check_question=check_question,
         next_step_hint=next_step_hint,
     )
     selected_images = select_images_for_concept(
@@ -1559,12 +1947,12 @@ def answer_lesson_flow_question(
             "current_step_index": max(0, safe_int(concept.get("concept_index"), 0)),
             "awaiting_understanding": True,
             "lesson_complete": False,
-            "last_question": parsed["check_question"],
+            "last_question": check_question,
             "used_image_ids": updated_used_image_ids,
         },
-        "textbook_answer": parsed["textbook_answer"],
-        "extra_explanation": parsed["extra_explanation"],
-        "check_question": parsed["check_question"],
+        "textbook_answer": textbook_answer,
+        "extra_explanation": extra_explanation,
+        "check_question": check_question,
         "next_hint": next_step_hint,
         "citations": [],
     }
@@ -1639,12 +2027,13 @@ def run_lesson_flow_chat(
                 lesson_name=lesson_name,
                 concept=concepts[next_index],
                 chat_model=chat_model,
+                previous_question=flow_state["last_question"],
                 used_image_ids=flow_state["used_image_ids"],
                 next_step_hint=build_next_step_hint(concepts, next_index),
             )
             next_payload["response"] = prepend_lesson_feedback(
                 next_payload.get("response"),
-                "তোমার আগের উত্তর ঠিক আছে।",
+                "ঠিক ধরেছো। এবার সেই ধারণার উপর দাঁড়িয়ে পরের অংশে যাই।",
             )
             return next_payload
 
@@ -1663,7 +2052,7 @@ def run_lesson_flow_chat(
         )
         retry_payload["response"] = prepend_lesson_feedback(
             retry_payload.get("response"),
-            "তোমার আগের উত্তর পুরোপুরি ঠিক হয়নি। আবার সহজভাবে দেখি।",
+            "এখানে একটু গ্যাপ আছে। ভুল জায়গাটা ঠিক করে আবার দেখি।",
         )
         return retry_payload
 
@@ -1679,20 +2068,13 @@ def run_lesson_flow_chat(
 
 
 def run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_catalog, history, user_text, chat_model=None):
-    del thread_id
+    del thread_id, lesson_catalog
 
     llm = get_llm(chat_model)
     if llm is None:
         raise ValueError(get_missing_chat_model_key_message(chat_model))
 
-    retrieval_query = build_retrieval_query(user_text, history)
-    retrieval = retrieve_relevant_lesson_chunks(
-        lesson_catalog,
-        retrieval_query,
-        current_lesson_name=lesson_name,
-        top_k=3,
-    )
-    prompt = build_grounded_prompt(chapter_name, lesson_name, user_text, retrieval)
+    prompt = build_study_chat_prompt(chapter_name, lesson_name, user_text)
     messages = [SystemMessage(content=GROUNDING_SYSTEM_PROMPT)]
     messages.extend(build_history_messages(history))
     messages.append(HumanMessage(content=prompt))
@@ -1712,25 +2094,24 @@ def run_grounded_chat(thread_id, chapter_name, lesson_name, lesson_catalog, hist
         raise ValueError(normalize_error_message(exc)) from exc
 
     parsed = parse_grounded_response(response.content)
-    citations = build_citations(chapter_name, lesson_name, retrieval)
+    citations = []
     response_markdown = compose_chat_markdown(
         parsed["textbook_answer"],
         parsed["extra_explanation"],
         citations,
     )
 
-    image_lesson_name = str(retrieval.get("source_lesson_name") or lesson_name).strip() or lesson_name
     selected_images = select_images_for_reply(
         chapter_name=chapter_name,
-        lesson_name=image_lesson_name,
+        lesson_name=lesson_name,
         user_text=user_text,
         textbook_answer=parsed["textbook_answer"],
         extra_explanation=parsed["extra_explanation"],
-        retrieval=retrieval,
+        retrieval={},
     )
     response_images = resolve_images_for_response(
         chapter_name=chapter_name,
-        lesson_name=image_lesson_name,
+        lesson_name=lesson_name,
         selected_images=selected_images,
         response_text=response_markdown,
         chat_model=chat_model,
@@ -1763,21 +2144,23 @@ def run_chat(
         lesson_catalog = lesson_source
         lesson_source = None
 
-    catalog = ensure_lesson_catalog(
-        chapter_name=chapter_name,
-        lesson_name=lesson_name,
-        lesson_source=lesson_source,
-        lesson_catalog=lesson_catalog,
-    )
-    if not catalog:
-        raise ValueError("Lesson content is empty")
-
     flow_state = normalize_lesson_flow_state(saved_thread_state)
-    if (flow_state["mode"] == "lesson_flow" and not flow_state["lesson_complete"]) or (
+    use_lesson_flow = (flow_state["mode"] == "lesson_flow" and not flow_state["lesson_complete"]) or (
         flow_state["lesson_complete"] and is_introductory_question(user_text)
     ) or (
         flow_state["mode"] != "lesson_flow" and is_introductory_question(user_text)
-    ):
+    )
+
+    if use_lesson_flow:
+        catalog = ensure_lesson_catalog(
+            chapter_name=chapter_name,
+            lesson_name=lesson_name,
+            lesson_source=lesson_source,
+            lesson_catalog=lesson_catalog,
+        )
+        if not catalog:
+            raise ValueError("Lesson content is empty")
+
         return run_lesson_flow_chat(
             thread_id=thread_id,
             chapter_name=chapter_name,
@@ -1793,7 +2176,7 @@ def run_chat(
         thread_id=thread_id,
         chapter_name=chapter_name,
         lesson_name=lesson_name,
-        lesson_catalog=catalog,
+        lesson_catalog=[],
         history=history,
         user_text=user_text,
         chat_model=chat_model,

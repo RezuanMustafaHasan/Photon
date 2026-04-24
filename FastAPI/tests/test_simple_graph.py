@@ -35,11 +35,15 @@ except ModuleNotFoundError:
     sys.modules["langchain_groq"] = langchain_groq_module
 
 from graph.simple_graph import (
-    build_retrieval_query,
+    assess_understanding_reply,
+    build_lesson_concepts,
     compose_chat_markdown,
     extract_figure_hints,
     find_best_lesson_image,
+    is_student_question_in_lesson_flow,
+    normalize_grounded_text,
     parse_grounded_response,
+    parse_teaching_response,
     resolve_chat_model_config,
     resolve_images_for_response,
     run_chat,
@@ -228,20 +232,33 @@ class SimpleGraphTests(unittest.TestCase):
         self.assertEqual(parsed["textbook_answer"], "প্রধান ধারণা\n\n- প্রথম পয়েন্ট")
         self.assertEqual(parsed["extra_explanation"], "আরও\nসহজভাবে")
 
+    def test_normalize_grounded_text_removes_escaped_answer_marker(self):
+        output = normalize_grounded_text("সমস্যা দাও।\\\\ উত্তর: এখনই উত্তর দিও না।")
+
+        self.assertIn("\nউত্তর:", output)
+        self.assertNotIn("\\\\ উত্তর", output)
+
+    def test_normalize_grounded_text_corrects_negative_charge_direction_slip(self):
+        output = normalize_grounded_text(
+            "ধনাত্মক আধান উচ্চ থেকে নিম্নে যায়, বা নিম্ন বিভবের দিকে ঋণাত্মক আধান প্রবাহিত হবে।"
+        )
+
+        self.assertIn("ঋণাত্মক আধান নিম্ন বিভব থেকে উচ্চ বিভবের দিকে", output)
+        self.assertNotIn("নিম্ন বিভবের দিকে ঋণাত্মক আধান", output)
+
+    def test_parse_teaching_response_cleans_check_question_prefix(self):
+        parsed = parse_teaching_response(
+            '{"textbook_answer":"ধারণা","extra_explanation":"","check_question":"ছোট প্রশ্ন: বিভব কী?**"}'
+        )
+
+        self.assertEqual(parsed["check_question"], "বিভব কী?")
+
     def test_resolve_chat_model_config_accepts_provider_prefixed_models(self):
         config = resolve_chat_model_config("openai:gpt-5.4-nano")
 
         self.assertEqual(config["id"], "openai:gpt-5.4-nano")
         self.assertEqual(config["provider"], "openai")
         self.assertEqual(config["model"], "gpt-5.4-nano")
-
-    def test_build_retrieval_query_keeps_start_intent_clean(self):
-        query = build_retrieval_query(
-            "start",
-            [{"role": "assistant", "content": "Ask your question here."}],
-        )
-
-        self.assertEqual(query, "start")
 
     def test_extract_figure_hints_prefers_figure_titles(self):
         hints = extract_figure_hints(
@@ -250,6 +267,91 @@ class SimpleGraphTests(unittest.TestCase):
 
         self.assertEqual(len(hints), 1)
         self.assertIn("তড়িৎ বলরেখার বিন্যাস", hints[0])
+
+    def test_assess_understanding_accepts_potential_destination_answer(self):
+        understood = assess_understanding_reply(
+            llm=None,
+            chapter_name="স্থির তড়িৎবিদ্যা",
+            lesson_name="তড়িৎ বিভব",
+            concept={"section_label": "তড়িৎ বিভব", "chunk_text": "ধনাত্মক আধান বেশি বিভব থেকে কম বিভবে যায়।"},
+            previous_question="ধরি দুই পরিবাহীর বিভব V_1 > V_2। ধনাত্মক আধান কোন পরিবাহীর দিকে যাবে? (V_1 নাকি V_2?)",
+            student_reply="v2",
+        )
+
+        self.assertTrue(understood)
+
+    def test_assess_understanding_accepts_potential_direction_with_stop_condition(self):
+        understood = assess_understanding_reply(
+            llm=None,
+            chapter_name="স্থির তড়িৎবিদ্যা",
+            lesson_name="তড়িৎ বিভব",
+            concept={"section_label": "তড়িৎ বিভব", "chunk_text": "আধান প্রবাহ বিভবের উপর নির্ভর করে।"},
+            previous_question="প্রথমটার বিভব কম, দ্বিতীয়টার বিভব বেশি। সংযোগ দিলে আধানের প্রবাহ কোন দিকের হবে এবং কখন থামবে?",
+            student_reply="V 2 theke V 1 er dike. will stop when V1=V2.",
+        )
+
+        self.assertTrue(understood)
+
+    def test_assess_understanding_accepts_numeric_potential_positive_direction(self):
+        understood = assess_understanding_reply(
+            llm=None,
+            chapter_name="স্থির তড়িৎবিদ্যা",
+            lesson_name="তড়িৎ বিভব",
+            concept={"section_label": "তড়িৎ বিভব", "chunk_text": "ধনাত্মক আধান বেশি বিভব থেকে কম বিভবে যায়।"},
+            previous_question="যদি একটি পরিবাহী +10V এবং অন্যটি +4V বিভবের হয়, তবে ধনাত্মক আধান কোন দিক দিয়ে প্রবাহিত হবে?",
+            student_reply="ধনাত্মক আধান +10V থেকে +4V দিকে যাবে।",
+        )
+
+        self.assertTrue(understood)
+
+    def test_assess_understanding_accepts_numeric_potential_negative_direction(self):
+        understood = assess_understanding_reply(
+            llm=None,
+            chapter_name="স্থির তড়িৎবিদ্যা",
+            lesson_name="তড়িৎ বিভব",
+            concept={"section_label": "তড়িৎ বিভব", "chunk_text": "ঋণাত্মক আধান কম বিভব থেকে বেশি বিভবে যায়।"},
+            previous_question="যদি একটি পরিবাহী +2V এবং অন্যটি −5V বিভবের হয়, তবে ঋণাত্মক আধান কোন দিক দিয়ে প্রবাহিত হবে?",
+            student_reply="-5V theke +2V dike.",
+        )
+
+        self.assertTrue(understood)
+
+    def test_assess_understanding_accepts_bangla_digit_potential_values(self):
+        understood = assess_understanding_reply(
+            llm=None,
+            chapter_name="স্থির তড়িৎবিদ্যা",
+            lesson_name="তড়িৎ বিভব",
+            concept={"section_label": "তড়িৎ বিভব", "chunk_text": "ধনাত্মক আধান বেশি বিভব থেকে কম বিভবে যায়।"},
+            previous_question="যদি একটি ধাতব গ্লাসের বিভব ১০ V এবং অন্যটির ৪ V হয়, তবে ধনাত্মক আধান কোন দিক দিয়ে প্রবাহিত হবে?",
+            student_reply="10V থেকে 4V দিকে।",
+        )
+
+        self.assertTrue(understood)
+
+    def test_practice_request_is_handled_as_lesson_flow_question(self):
+        self.assertTrue(is_student_question_in_lesson_flow("give me a math problem related to this"))
+
+    def test_visual_request_is_handled_as_lesson_flow_question(self):
+        self.assertTrue(is_student_question_in_lesson_flow("চিত্র দিয়ে একবার বোঝাও"))
+
+    def test_build_lesson_concepts_compacts_large_raw_lessons(self):
+        sections = []
+        for index in range(1, 25):
+            sections.append(f"## Section {index}\n\nধারণা-{index} " + ("এই অংশে তড়িৎ বিভবের ধারণা ব্যাখ্যা করা হয়েছে। " * 12))
+        lesson_catalog = [
+            {
+                "chapter_name": "Static Electricity",
+                "lesson_name": "তড়িৎ বিভব",
+                "content": "\n\n".join(sections),
+            }
+        ]
+
+        concepts = build_lesson_concepts(lesson_catalog, "তড়িৎ বিভব")
+
+        self.assertLessEqual(len(concepts), 8)
+        joined = "\n".join(concept["chunk_text"] for concept in concepts)
+        self.assertIn("ধারণা-1", joined)
+        self.assertIn("ধারণা-24", joined)
 
     @patch("graph.simple_graph.load_images_from_database")
     def test_find_best_lesson_image_matches_relevant_caption(self, mock_load_images):
@@ -313,7 +415,7 @@ class SimpleGraphTests(unittest.TestCase):
             {
                 "image_id": "img-potential",
                 "imageURL": "https://example.com/potential.png",
-                "description": "Electric potential difference between two charged conductors",
+                "description": "দুটি পরিবাহীর বিভব পার্থক্যের রেখাচিত্র",
                 "topic": ["তড়িৎ বিভব"],
             },
             {
@@ -331,11 +433,59 @@ class SimpleGraphTests(unittest.TestCase):
                 "section_label": "তড়িৎ বিভব",
                 "chunk_text": "দুটি পরিবাহীর বিভবের পার্থক্য আধান প্রবাহের দিক নির্ধারণ করে।",
             },
-            response_text="### বিভব\n\nদুটি পরিবাহীর মধ্যে $V$ ভিন্ন হলে আধান চলাচল করে।",
+            response_text="### বিভব\n\nরেখাচিত্র দিয়ে দেখলে দুটি পরিবাহীর মধ্যে $V$ ভিন্ন হলে আধান চলাচল করে।",
+            extra_hint="রেখাচিত্র দিয়ে দেখাও",
         )
 
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0]["image_id"], "img-potential")
+
+    @patch("graph.simple_graph.load_images_from_database")
+    def test_select_images_for_concept_skips_non_visual_context(self, mock_load_images):
+        mock_load_images.return_value = [
+            {
+                "image_id": "img-potential",
+                "imageURL": "https://example.com/potential.png",
+                "description": "Electric potential difference between two charged conductors",
+                "topic": ["তড়িৎ বিভব"],
+            }
+        ]
+
+        selected = select_images_for_concept(
+            chapter_name="Static Electricity",
+            lesson_name="তড়িৎ বিভব",
+            concept={
+                "section_label": "তড়িৎ বিভব",
+                "chunk_text": "দুটি পরিবাহীর বিভবের পার্থক্য আধান প্রবাহের দিক নির্ধারণ করে।",
+            },
+            response_text="### বিভব\n\nদুটি পরিবাহীর মধ্যে $V$ ভিন্ন হলে আধান চলাচল করে।",
+        )
+
+        self.assertEqual(selected, [])
+
+    @patch("graph.simple_graph.load_images_from_database")
+    def test_select_images_for_concept_does_not_use_response_visual_words_by_itself(self, mock_load_images):
+        mock_load_images.return_value = [
+            {
+                "image_id": "img-field-lines",
+                "imageURL": "https://example.com/field-lines.png",
+                "description": "তড়িৎ ক্ষেত্র রেখার ছবি",
+                "topic": ["তড়িৎ ক্ষেত্র"],
+            }
+        ]
+
+        selected = select_images_for_concept(
+            chapter_name="Static Electricity",
+            lesson_name="তড়িৎ বিভব",
+            concept={
+                "section_label": "তড়িৎ বিভব",
+                "chunk_text": "ইলেকট্রন তড়িৎ ক্ষেত্রের বিপরীত দিকে চলে।",
+            },
+            response_text="তড়িৎ ক্ষেত্রের রেখাচিত্র দিয়ে ভাবলে বিষয়টি বোঝা যায়।",
+            extra_hint="তড়িৎ বিভবের সাথে electron এর relation কী?",
+        )
+
+        self.assertEqual(selected, [])
 
     @patch("graph.simple_graph.get_llm")
     @patch("graph.simple_graph.load_images_from_database")
@@ -386,6 +536,26 @@ class SimpleGraphTests(unittest.TestCase):
         self.assertEqual(result["citations"], [])
         self.assertEqual(result["images"], [])
         self.assertIn("দূরত্ব বাড়লে বল কমে যায়", result["response"])
+        prompt = mock_get_llm.return_value.messages[-1][-1].content
+        self.assertNotIn("Retrieved lesson chunks", prompt)
+
+    @patch("graph.simple_graph.load_images_from_database", return_value=[])
+    @patch("graph.simple_graph.get_llm")
+    def test_run_chat_normal_query_does_not_require_lesson_content(self, mock_get_llm, _mock_load_images):
+        mock_get_llm.return_value = FakeLLM(
+            '{"textbook_answer":"পড়াশোনার প্রশ্ন হলে আমি সরাসরি উত্তর দেব।","extra_explanation":""}'
+        )
+
+        result = run_chat(
+            "thread-no-content",
+            "Static Electricity",
+            "Coulomb's Law",
+            None,
+            [],
+            "electric field কী?",
+        )
+
+        self.assertIn("সরাসরি উত্তর", result["response"])
 
     @patch("graph.simple_graph.load_images_from_database", return_value=[])
     @patch("graph.simple_graph.get_llm")
@@ -465,10 +635,42 @@ class SimpleGraphTests(unittest.TestCase):
         )
 
         self.assertIn("দ্বিতীয় ধারণা", second["textbook_answer"])
-        self.assertIn("তোমার আগের উত্তর ঠিক আছে", second["response"])
+        self.assertIn("ঠিক ধরেছো", second["response"])
         self.assertEqual(second["thread_state"]["concept_index"], 1)
         self.assertEqual(second["thread_state"]["current_step_index"], 1)
         self.assertTrue(second["thread_state"]["awaiting_understanding"])
+
+    @patch("graph.simple_graph.load_images_from_database", return_value=[])
+    @patch("graph.simple_graph.get_llm")
+    def test_run_chat_avoids_repeating_same_potential_check_type(self, mock_get_llm, _mock_load_images):
+        llm = LessonFlowLLM(
+            [
+                '{"textbook_answer":"ধনাত্মক আধান উচ্চ বিভব থেকে নিম্ন বিভবে যায়।","extra_explanation":"","check_question":"উচ্চ বিভব থেকে নিম্ন বিভবে কোন ধরণের আধান যায়?"}',
+                '{"textbook_answer":"আধান প্রবাহ বিভবের পার্থক্যের ওপর নির্ভর করে।","extra_explanation":"","check_question":"ধনাত্মক আধান উচ্চ বিভব থেকে নিম্ন বিভবে কোন দিকে যাবে?"}',
+            ]
+        )
+        mock_get_llm.return_value = llm
+        lesson = {
+            "lesson_name": "তড়িৎ বিভব",
+            "topics": [
+                {"title": "দিক", "content": "ধনাত্মক আধান উচ্চ বিভব থেকে নিম্ন বিভবে যায়।"},
+                {"title": "চালক", "content": "আধান প্রবাহ মোট আধান নয়, বিভবের পার্থক্যের ওপর নির্ভর করে।"},
+            ],
+        }
+
+        first = run_chat("flow-repeat-check", "Static Electricity", "তড়িৎ বিভব", lesson, [], "start")
+        second = run_chat(
+            "flow-repeat-check",
+            "Static Electricity",
+            "তড়িৎ বিভব",
+            lesson,
+            [{"role": "assistant", "content": first["response"]}],
+            "fine",
+            saved_thread_state=first["thread_state"],
+        )
+
+        self.assertIn("মোট আধান", second["check_question"])
+        self.assertNotEqual(second["check_question"], "ধনাত্মক আধান উচ্চ বিভব থেকে নিম্ন বিভবে কোন দিকে যাবে?")
 
     @patch("graph.simple_graph.load_images_from_database", return_value=[])
     @patch("graph.simple_graph.get_llm")
@@ -504,6 +706,41 @@ class SimpleGraphTests(unittest.TestCase):
         self.assertEqual(second["thread_state"]["current_step_index"], 0)
         self.assertTrue(second["thread_state"]["awaiting_understanding"])
         self.assertIn("ছোট প্রশ্ন:", second["response"])
+        self.assertEqual(second["check_question"], first["check_question"])
+        self.assertIn(first["check_question"], second["response"])
+
+    @patch("graph.simple_graph.load_images_from_database", return_value=[])
+    @patch("graph.simple_graph.get_llm")
+    def test_run_chat_turns_practice_request_into_new_check(self, mock_get_llm, _mock_load_images):
+        llm = LessonFlowLLM(
+            [
+                '{"textbook_answer":"বিভব পার্থক্য থাকলে আধান চলাচল করে।","extra_explanation":"","check_question":"ধনাত্মক আধান কোন দিকে যায়?"}',
+                '{"textbook_answer":"চলো ছোট অংক করি: V_2 = 10V এবং V_1 = 4V হলে ধনাত্মক আধান কোন দিকে যাবে?\\\\ উত্তর: V_2 থেকে V_1।","extra_explanation":"V_2 থেকে V_1 যাবে।","check_question":"V_2 = 10V এবং V_1 = 4V হলে ধনাত্মক আধান কোন দিকে যাবে?"}',
+            ]
+        )
+        mock_get_llm.return_value = llm
+        lesson = {
+            "lesson_name": "তড়িৎ বিভব",
+            "topics": [
+                {"title": "বিভব", "content": "ধনাত্মক আধান বেশি বিভব থেকে কম বিভবের দিকে যায়।"},
+            ],
+        }
+
+        first = run_chat("flow-practice", "স্থির তড়িৎবিদ্যা", "তড়িৎ বিভব", lesson, [], "start")
+        second = run_chat(
+            "flow-practice",
+            "স্থির তড়িৎবিদ্যা",
+            "তড়িৎ বিভব",
+            lesson,
+            [{"role": "assistant", "content": first["response"]}],
+            "give me a math problem related to this",
+            saved_thread_state=first["thread_state"],
+        )
+
+        self.assertNotEqual(second["check_question"], first["check_question"])
+        self.assertIn("10V", second["check_question"])
+        self.assertNotIn("V_2 থেকে V_1", second["response"])
+        self.assertNotIn("উত্তর:", second["response"])
 
     @patch("graph.simple_graph.load_images_from_database", return_value=[])
     @patch("graph.simple_graph.get_llm")
@@ -622,7 +859,7 @@ class SimpleGraphTests(unittest.TestCase):
         )
 
         self.assertIn("আবার সহজভাবে", second["textbook_answer"])
-        self.assertIn("তোমার আগের উত্তর পুরোপুরি ঠিক হয়নি", second["response"])
+        self.assertIn("গ্যাপ আছে", second["response"])
         self.assertEqual(second["thread_state"]["concept_index"], 0)
         self.assertEqual(second["thread_state"]["current_step_index"], 0)
         self.assertTrue(second["thread_state"]["awaiting_understanding"])
@@ -722,7 +959,7 @@ class SimpleGraphTests(unittest.TestCase):
 
     @patch("graph.simple_graph.load_images_from_database", return_value=[])
     @patch("graph.simple_graph.get_llm")
-    def test_run_chat_adds_source_only_for_cross_lesson_match(self, mock_get_llm, _mock_load_images):
+    def test_run_chat_answers_study_query_without_cross_lesson_citation(self, mock_get_llm, _mock_load_images):
         mock_get_llm.return_value = FakeLLM(
             '{"textbook_answer":"তড়িৎ ক্ষেত্রের ধারণাটি এই অধ্যায়ের Electric Field lesson-এ সরাসরি বোঝানো হয়েছে।","extra_explanation":"সহজভাবে বললে, চার্জের আশেপাশের প্রভাবিত অঞ্চলই electric field।"}'
         )
@@ -736,9 +973,8 @@ class SimpleGraphTests(unittest.TestCase):
             "electric field কী?",
         )
 
-        self.assertEqual(len(result["citations"]), 1)
-        self.assertEqual(result["citations"][0]["lesson_name"], "Electric Field")
-        self.assertEqual(result["citations"][0]["snippet"], "")
+        self.assertEqual(result["citations"], [])
+        self.assertIn("electric field", result["extra_explanation"].lower())
 
     @patch("graph.simple_graph.load_images_from_database", return_value=[])
     @patch("graph.simple_graph.get_llm")
@@ -767,7 +1003,7 @@ class SimpleGraphTests(unittest.TestCase):
             {
                 "image_id": "img-coulomb",
                 "imageURL": "https://example.com/coulomb.png",
-                "description": "Two charges separated by distance r showing Coulomb force",
+                "description": "দুটি চার্জের দূরত্ব ও কুলম্ব বলের রেখাচিত্র",
                 "topic": ["কুলম্বের সূত্র"],
             }
         ]
@@ -778,7 +1014,7 @@ class SimpleGraphTests(unittest.TestCase):
             "Coulomb's Law",
             [SAMPLE_LESSON, SECOND_LESSON],
             [],
-            "দূরত্ব বাড়লে বল কেন কমে যায়?",
+            "কুলম্বের সূত্রে চিত্র দিয়ে দেখাও, দূরত্ব বাড়লে বল কেন কমে যায়?",
         )
 
         self.assertEqual(len(result["images"]), 1)
