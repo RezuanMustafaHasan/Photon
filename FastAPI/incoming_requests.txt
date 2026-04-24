@@ -1,35 +1,696 @@
-Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"তড়িৎক্ষেত্রের “দিক” ও “প্রভাবের বিস্তার” বোঝাতে","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"bivob ki?","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"বিভব কি ?","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"কম","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"বিপরীত দিকে","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"বেশি","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"বাহিরে","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"+ থেকে - এ","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"0 hoy.","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"কারন উভয় আধান এর মান সমান","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"start","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"তড়িৎ বলরেখার ধারণা আমাদের তড়িৎক্ষেত্রের দিকনির্দেশ ও প্রভাবের ধরন বুঝতে সাহায্য করে.\nতড়িৎ বলরেখা কি বাস্তব কোন রেখা?","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"force er dik","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"তড়িৎক্ষেত্রের দিক","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"sporshok er dikei hobe","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"start","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"dui bostur bivob shoman hoye jay","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"bivob","user_id":"69ccd605064c28a837a780c8","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"jokhon bivob shoman hoye jabe","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"bivob","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"bivob shoman hole","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"- charge ashbe. tai bostuti nistorito hobe.","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"akorshon","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"bikorshon","user_id":"69a404e8f576e540aeca194e","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"start","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"bikorshon","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"2x","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"kome","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"kome","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"kombe","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"দুটি আধানের মান একই রেখে তাদের দূরত্ব \nr\nr থেকে \n2\nr\n2r করলে বল কমবে","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"d এর বর্গের বেস্তানুপাতিক হারে","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
-Incoming request: {"message":"1/4 গুন","user_id":"69ea1a5171b460926bbbce80","chapter_name":"Static Electricity","lesson_name":"কুলম্বের সূত্র","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+AI : Ask your question here.
+HUMAN : start
+AI: তড়িৎ বিভব (Electric Potential)
+পরিবাহীর মধ্যে আধান/আবদ্ধ ধরণের “প্রসারণের ঝোঁক” আছে—যদি দুটি তড়িৎগ্রস্ত 
+(
+আহিত
+/
+c
+h
+a
+r
+g
+e
+d
+(আহিত/charged) বস্তুকে একটি পরিবাহী তার দিয়ে যুক্ত করা হয়, তাহলে তাদের মধ্যে আধান আদান-প্রদান হতে পারে।
+
+কিন্তু এই আদান-প্রদানের ঘটনা শুধু আধানের পরিমাণের উপর নির্ভর করে না। বরং নির্ভর করে—বস্তুর তড়িৎ বিভব কেমন তার উপর।
+
+১) তড়িৎ বিভব কী বোঝায়?
+তড়িৎগ্রস্ত দুটি বস্তুকে তার দিয়ে যুক্ত করলে যে দিকে আধান যাবে, সেটাই ইঙ্গিত দেয় কোন বস্তুর বিভব বেশি/কম।
+
+অর্থাৎ, কোনো পরিবাহীর উপর তাকে যে অবস্থায় “বিভব” (potential) হিসেবে ধরা হয়, তা এমন একটি রাশি—যা বলে দেয়:
+
+বিভব বেশি হলে ধনাত্মক আধান (positive charge) কোথায় যাবে
+আর বিভব কম হলে ঋণাত্মক আধান (negative charge) কোথায় যাবে
+২) বিভবের পার্থক্য থাকলে আধান প্রবাহ হয় কেন?
+যখন দুই পরিবাহীর বিভব সমান নয়, তখন তাদের মধ্যে বিভবের পার্থক্যের কারণে আধান স্থানান্তর হয়।
+
+টীকা (মূল বক্তব্য):
+
+যে পরিবাহীর বিভব বেশি, সেখান থেকে কম বিভবের দিকে ধনাত্মক আধান প্রবাহিত হবে।
+আবার যে পরিবাহীর বিভব কম, সেখান থেকে বেশি বিভবের দিকে ঋণাত্মক আধান প্রবাহিত হবে।
+এখানে একটা সহজভাবে ভাবো:
+
+ধনাত্মক আধান যেন “কম বিভবের দিকে টানা” হচ্ছে।
+ঋণাত্মক আধান একই দিকে না গিয়ে বেশি বিভবের দিকে যায়—কারণ ঋণাত্মক আধানের চিহ্ন (sign) অনুযায়ী প্রভাব উল্টো মনে হয়।
+৩) কখন আধানের আদান-প্রদান বন্ধ হয়?
+আধানের প্রবাহ দুই পরিবাহীর বিভব সমান না হওয়া পর্যন্ত চলতে থাকে।
+
+বিভব সমান হয়ে গেলে আর কোনো “চালিকাশক্তি” (driving reason) থাকে না—তাই আধানের প্রবাহ থেমে যায়।
+
+সারকথা:
+
+তার দিয়ে যুক্ত দুই পরিবাহীর বিভব সমান না হলে আধান প্রবাহ হয়।
+বিভব বেশি → কমের দিকে ধনাত্মক, কম → বেশি দিকে ঋণাত্মক।
+বিভব সমান হলেই প্রবাহ বন্ধ।
+ইনটুইশন: বিভবকে আমরা “আধানকে ঠেলার সম্ভাব্য প্রবণতা” হিসেবে ধরতে পারি। চার্জ সবসময় এমনভাবে সরে যাতে দুপাশের ‘চালনা’ কমে আসে—অবশেষে দুই পরিবাহীর বিভব সমান হয়ে গেলে আর নড়াচড়া দরকার থাকে না।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: ধরি দুই পরিবাহীর বিভব 
+V
+1
+>
+V
+2
+V 
+1
+​
+ >V 
+2
+​
+ । তার দিয়ে যুক্ত করলে ধনাত্মক আধান কোন পরিবাহীর দিকে যাবে? (V_1 নাকি V_2?)
+HUMAN: v2
+AI: তোমার আগের উত্তর পুরোপুরি ঠিক হয়নি। আবার সহজভাবে দেখি।
+
+তড়িৎ বিভব (Electric Potential)
+তড়িৎ বিভব বলতে মূলত বোঝায়—দুটি তড়িৎগ্রস্ত (চার্জযুক্ত) বস্তুকে/পরিবাহীকে একটি পরিবাহী তার দিয়ে যুক্ত করলে তাদের মধ্যে আধানের আদান-প্রদান (চার্জের সঞ্চালন) হবে কি হবে না এবং হলে কোন দিক দিয়ে হবে।
+
+১) শুধু চার্জের পরিমাণই নির্ধারণ করে না
+দুটি বস্তু/পরিবাহীর চার্জ থাকলেও, তার দিয়ে যুক্ত করলে আধানের আদান-প্রদান অবশ্যই শুধু আধানের পরিমাণের উপর নির্ভর করে না।
+
+বরং নির্ধারক হলো—বস্তুর তড়িৎ বিভব (যেটা বলে বোঝায় “বিভবের অবস্থা/শক্তির অবস্থা”)
+২) বিভব বেশি → ধনাত্মক আধান যায় কম বিভবে (এটাই মূল নিয়ম)
+যদি দুই পরিবাহীকে তার দিয়ে যুক্ত করা হয় এবং তাদের বিভব সমান না হয়, তাহলে চার্জ চলাচল শুরু হয়।
+
+বেশি তড়িৎ বিভবের পরিবাহী থেকে কম তড়িৎ বিভবের পরিবাহীর দিকে ধনাত্মক আধান প্রবাহিত হয়।
+ফলে বিপরীতভাবে, কম বিভব সম্পন্ন পরিবাহী থেকে বেশি বিভব সম্পন্ন পরিবাহীতে ঋণাত্মক আধান প্রবাহিত হবে।
+✅ তাই আগের প্রশ্নে যদি 
+V
+1
+>
+V
+2
+V 
+1
+​
+ >V 
+2
+​
+  হয়, তাহলে:
+
+ধনাত্মক আধান যাবে 
+V
+1
+V 
+1
+​
+  (বেশি) → 
+V
+2
+V 
+2
+​
+  (কম)
+ঋণাত্মক আধান যাবে 
+V
+2
+V 
+2
+​
+  → 
+V
+1
+V 
+1
+​
+ 
+৩) বিভব সমান না হওয়া পর্যন্ত চলবে
+আধানের প্রবাহ চলতে থাকে যতক্ষণ না দুই পরিবাহীর তড়িৎ বিভব সমান হচ্ছে।
+
+যখন 
+V
+1
+=
+V
+2
+V 
+1
+​
+ =V 
+2
+​
+  হয়ে যায়, তখন আর “ড্রাইভিং” পার্থক্য থাকে না—তাই আধান প্রবাহ বন্ধ হয়ে যায়।
+এক কথায়: বিভবের পার্থক্য থাকলে চার্জ চলবে, আর বিভব সমান হলেই বন্ধ হবে।
+
+ইনটুইশন: এটা এমন ভাবতে পারো—দুই জায়গার ‘উচ্চতা/অবস্থা’ সমান না হলে জিনিস (ধনাত্মক চার্জ) কম অবস্থার দিকে যেতে চায়। ঋণাত্মক চার্জের ক্ষেত্রে দিকটা উল্টো মনে হবে, কারণ তার প্রকৃতি/চিহ্ন বিপরীত।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: ধরি দুই পরিবাহীর বিভব 
+V
+1
+<
+V
+2
+V 
+1
+​
+ <V 
+2
+​
+ । ধনাত্মক আধান কোন পরিবাহীর দিকে যাবে? (V_1 নাকি V_2?)
+HUMAN: From v2 to v1.
+AI: তোমার আগের উত্তর পুরোপুরি ঠিক হয়নি। আবার সহজভাবে দেখি।
+
+তড়িৎ বিভব (Electric Potential)
+তড়িৎ বিভব বোঝার জন্য আগে এই কথাটা ধরতে হবে—দুটি তড়িৎগ্রস্ত/আহিত বস্তু যদি একটি পরিবাহী তার দিয়ে জুড়ে দেওয়া হয়, তাহলে তাদের মধ্যে আধানের আদান-প্রদান হতে পারে।
+
+কিন্তু মজার বিষয় হলো: আধানের এই আদান-প্রদান বস্তু দুটির আধানের পরিমাণের উপর নির্ভর করে না (শুধু “কত কুলম্ব” আছে তার উপর নয়)। আদান-প্রদান হয় কারণ দুই বস্তুর মধ্যে তড়িৎ বিভবের পার্থক্য থাকে।
+
+1) বিভব বেশি মানে কী?
+যে পরিবাহীর বিভব বেশি, সেটিকে বলা যায় “আরও শক্তিশালী তড়িৎ প্রভাব” সহ অবস্থান।
+যখন দুই পরিবাহীর বিভব সমান নয়, তখন আধান চলাচল করে পার্থক্য কমাতে।
+2) ধনাত্মক ও ঋণাত্মক আধান কোন দিকে যাবে?
+বিভবের পার্থক্য থাকলে আধানের দিক নির্ভর করে বিভব বেশি থেকে কমের দিকে কেমনভাবে টানে—
+
+বেশি বিভব থেকে কম বিভবের দিকে ধনাত্মক আধান প্রবাহিত হয় না; বরং বিষয়টি টপিকের নিয়ম অনুযায়ী হবে:
+যে পরিবাহীর বিভব বেশি, সেখান থেকে কম বিভবের দিকে “ধনাত্মক আধান” যাবে।
+তাই কম বিভব সম্পন্ন পরিবাহী থেকে বেশি বিভব সম্পন্ন পরিবাহীতে ঋণাত্মক আধান প্রবাহিত হবে।
+সোজা কথায়:
+
+ধনাত্মক 
+(
++
+)
+(+): বেশি V → কম V
+ঋণাত্মক (−): কম V → বেশি V
+তুমি আগের চেক প্রশ্নে “
+V
+2
+V 
+2
+​
+  থেকে 
+V
+1
+V 
+1
+​
+ ” বলেছ। কিন্তু টপিকের নিয়ম অনুযায়ী যদি 
+V
+1
+<
+V
+2
+V 
+1
+​
+ <V 
+2
+​
+  হয়, তাহলে ধনাত্মক আধান যাবে 
+V
+2
+V 
+2
+​
+  (বেশি) → 
+V
+1
+V 
+1
+​
+  (কম)। কাজেই উত্তরটা ঠিকই এসেছে।
+
+3) আধানের প্রবাহ কতক্ষণ চলবে?
+আধানের প্রবাহ চলতে থাকে যতক্ষণ না:
+
+দুটি পরিবাহীর বিভব সমান না হচ্ছে।
+অর্থাৎ, শেষ পর্যন্ত সিস্টেমটা এমন অবস্থায় যায় যেখানে আর বিভবের পার্থক্য নেই—তখন নতুন করে আধান প্রবাহের “ড্রাইভিং ফোর্স” থাকে না (এই টপিকের ভাষায়: বিভব সমান হওয়া পর্যন্ত প্রবাহ চলতে থাকে)।
+
+4) ছোট উদাহরণ (কনসেপ্ট ধরতে)
+ধরি দুই পরিবাহী তার দিয়ে যুক্ত।
+
+একটির বিভব 
+V
+2
+V 
+2
+​
+  বেশি,
+অন্যটির বিভব 
+V
+1
+V 
+1
+​
+  কম (
+V
+1
+<
+V
+2
+V 
+1
+​
+ <V 
+2
+​
+ )।
+এখন ধনাত্মক আধান সেই দিকেই যাবে যেদিকে কম বিভবের দিকে পৌঁছাতে পারে—অতএব ধনাত্মক আধান 
+V
+2
+→
+V
+1
+V 
+2
+​
+ →V 
+1
+​
+ ।
+
+আর ঋণাত্মক আধান যাবে উল্টোভাবে কম বিভব থেকে বেশি বিভবে—অতএব ঋণাত্মক আধান 
+V
+1
+→
+V
+2
+V 
+1
+​
+ →V 
+2
+​
+ ।
+
+এভাবে বোঝা যায়, আধানের “গতি” আসলে বিভবের পার্থক্য মেটানোর চেষ্টা।
+
+ইনটুইশন: বিভবকে তুমি “টান/চাপ” হিসেবে ভাবতে পারো। বেশি বিভব জায়গা থেকে কম বিভব জায়গায় ধনাত্মক আধান যায় যেন পার্থক্য কমে। আর ঋণাত্মক আধান বিপরীতভাবে চলে, তাই মোটের উপর দুই জায়গার বিভব সমান না হওয়া পর্যন্ত আধান নড়াচড়া করে।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: ধরি 
+V
+A
+<
+V
+B
+V 
+A
+​
+ <V 
+B
+​
+ । ধনাত্মক আধান কোন পরিবাহীর দিকে যাবে—A নাকি B?
+HUMAN: A
+AI: তোমার আগের উত্তর পুরোপুরি ঠিক হয়নি। আবার সহজভাবে দেখি।
+
+তড়িৎ বিভব (Electric Potential)
+দুটি তড়িৎগ্রস্ত (আহিত) বস্তুকে/পরিবাহকে যদি একটা পরিবাহী তার দিয়ে যুক্ত করি, তাহলে তাদের মধ্যে আধানের আদান-প্রদান হতে পারে। কিন্তু প্রশ্ন হলো—এই আদান-প্রদানটা কেন হয়?
+
+১) শুধু আধানের পরিমাণ দিয়ে এটা নির্ধারিত নয়
+বস্তু দুটির আধানের পরিমাণ (কত কুলম্ব/কতটা চার্জ আছে) দেখে ঠিক করা যায় না যে আধান কোন দিকে যাবে।
+
+আধান যেদিকে যাবে, সেটা নির্ধারণ করে তড়িৎ বিভব (electric potential)।
+
+২) তড়িৎ বিভবের ধারণা: বেশি বিভব → কম বিভবের দিকে প্রাকৃতিক ধারা
+যে পরিবাহীর বিভব বেশি, সেখান থেকে কম বিভব-এর দিকে আধানের প্রবাহ ঘটে—এটাই মূল নিয়ম।
+
+আর আধানের ধরন অনুযায়ী “কোন চার্জ কোন দিকে যাবে” তা বুঝতে হয় এভাবে:
+
+ধনাত্মক আধান: বেশি বিভব সম্পন্ন পরিবাহী থেকে কম বিভব সম্পন্ন দিকে প্রবাহিত হয় না; বরং টপিকের ভাষা অনুযায়ী—
+বেশি বিভব সম্পন্ন পরিবাহী থেকে কম বিভব সম্পন্ন পরিবাহীতে নয়, বরং কম বিভব সম্পন্ন পরিবাহী থেকে বেশি বিভব সম্পন্ন পরিবাহীতে ধনাত্মক আধান প্রবাহিত হবে
+
+টপিকের সরাসরি কথাটা সবচেয়ে গুরুত্বপূর্ণ:
+
+বিভব বেশি (Higher potential) → কম বিভব (Lower potential)
+ধনাত্মক আধান যাবে কম বিভব সম্পন্ন পরিবাহী থেকে বেশি বিভব সম্পন্ন পরিবাহীতে
+ঋণাত্মক আধান যাবে বেশি বিভব সম্পন্ন পরিবাহী থেকে কম বিভব সম্পন্ন পরিবাহীতে
+(কারণ ঋণাত্মক আধানের “চিহ্ন” উল্টো হওয়ায় দিকও উল্টো দেখা যায়।)
+
+৩) কখন পর্যন্ত আধান চলতে থাকে?
+আধানের প্রবাহ চালু থাকে যতক্ষণ না দুটি পরিবাহীর বিভব সমান হয়।
+
+অর্থাৎ শেষ পর্যন্ত অবস্থা হয়:
+
+V
+A
+=
+V
+B
+V 
+A
+​
+ =V 
+B
+​
+ 
+এটাই “সমতা” (equilibrium): বিভব সমান হলে আর নেট আধান-প্রবাহ থাকে না।
+
+৪) ছোট করে নিয়মটা মনে রাখার উপায়
+দুটি পরিবাহীর বিভব যদি আলাদা হয়, তখন প্রকৃতি চেষ্টা করে বিভব সমান করতে।
+
+সুতরাং:
+
+ধনাত্মক আধান: 
+V
+কম
+V 
+কম
+​
+  থেকে 
+V
+বেশি
+V 
+বেশি
+​
+ 
+ঋণাত্মক আধান: 
+V
+বেশি
+V 
+বেশি
+​
+  থেকে 
+V
+কম
+V 
+কম
+​
+ 
+এটাই তড়িৎ বিভবের কারণে আধানের দিক বোঝার মূল ধারণা।
+
+ইনটিউশন: যেন “উঁচুতে” (বেশি বিভবে) থাকা জায়গায় ধনাত্মক আধান ‘ঠেলে’ দেওয়া হচ্ছে, আর ঋণাত্মক আধান উল্টোভাবে আচরণ করে—তাই তাদের দিক আলাদা দেখায়। লক্ষ্য হচ্ছে শেষ পর্যন্ত দুই জায়গার “উঁচু-নিচু” সমান করে ফেলা (বিভব সমান হওয়া)।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: ধরি 
+V
+A
+>
+V
+B
+V 
+A
+​
+ >V 
+B
+​
+ । ধনাত্মক আধান কোন পরিবাহীর দিকে যাবে—A নাকি B?
+HUMAN: A
+AI: তোমার আগের উত্তর ঠিক আছে।
+
+তড়িৎ বিভব (Electric Potential) — ধারণা ও ভূমিকা
+স্থির তড়িৎবিদ্যায় বিভব বলতে বোঝায় কোনো অাহিত পরিবাহীর তড়িৎগত অবস্থা—যেটা দিয়ে বোঝা যায়, সেটাকে অন্য একটি অাহিত পরিবাহীর সাথে তড়িৎগতভাবে সংযুক্ত করলে আধান (charge) প্রবাহ হবে কি না, এবং কোন দিকে হবে।
+
+অর্থাৎ,
+
+বিভব বলে দেয়: দুটি পরিবাহীকে সংযুক্ত করলে আধান দেবে নেবে—না কি মোটামুটি থাকবে?
+বিভব নির্ধারণ করে তড়িৎগত “চালনা/প্রবণতা” (electrical tendency) কোন দিকে কাজ করবে।
+বিভব কেন গুরুত্বপূর্ণ? (সংযোগ দিলে কী হবে—তার “সংকেত”)
+ধরি, দুইটা পরিবাহী A ও B আলাদা। তাদের বিভব আলাদা হলে, সংযোগের পরে আধানের পুনর্বণ্টন হবে—যাতে সিস্টেমটা সাম্যাবস্থার দিকে যায়। কিন্তু একদম মূল কথা হচ্ছে:
+
+বিভব হলো এমন একটি রাশি যা বলে দেয়, সংযুক্ত পরিবাহীগুলোর মধ্যে আধান আদান-প্রদান হবে কি না এবং হবে কি 
+পরিমাণ
+/
+দিকে
+পরিমাণ/দিকে।
+
+তাপমাত্রা-তুলনা (খুব কাজে লাগে বোঝার জন্য)
+বিভবের সাথে তাপমাত্রার একটা সাদৃশ্য আছে।
+
+তাপবিজ্ঞানে আমরা জানি:
+
+দুটি বস্তুকে তাপীয়ভাবে সংযুক্ত করলে তাপ প্রবাহ হতে পারে।
+তাপ প্রবাহ পর নির্ভর করে তাপের পরিমাণ (মোট তাপ) এর উপর নয়—বরং নির্ভর করে তাপমাত্রার উপর।
+উদাহরণস্বরূপ বলা যায়:
+
+একটি বস্তু খুব উষ্ণ এবং আরেকটি অনেক বড় হলেও কম তাপমাত্রার হলে,
+তবুও তাপ ছোট/উষ্ণ বস্তু থেকে বড়/কম তাপমাত্রার বস্তুতে প্রবাহিত হয়।
+কারণ চালিকাশক্তি হলো তাপমাত্রার পার্থক্য, মোট তাপের পরিমাণ নয়।
+স্থির তড়িৎবিদ্যায় সেই একই ধাঁচে:
+
+বিভবের পার্থক্য হলো আধান প্রবাহ/আদান-প্রদানের চালক।
+শুধু “মোট আধান” বা “আকার” দিয়ে সিদ্ধান্ত হয় না—সিদ্ধান্ত হয় বিভব দেখে।
+সুতরাং বিভবকে ভাবতে পারো—
+
+তাপের ক্ষেত্রে যেমন তাপমাত্রা বলে দেয় “কোথায় তাপ যাবে”,
+তড়িৎ ক্ষেত্রে তেমনি বিভব বলে দেয় “কোথায় আধান যাবে/আদান-প্রদান হবে”.
+ইন্টুইশন: বিভবকে আপনি “বৈদ্যুতিক উচ্চতা” (electrical height) হিসেবে ভাবতে পারো। বেশি উচ্চতা মানে আধান সহজে কম উচ্চতার দিকে যেতে চায়—তবে এখানে আসল ব্যাপার হলো সংযুক্ত করলে আধান দেবে/নেবে কি না, সেটা বিভব থেকেই বোঝা যায়।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: দুটি অাহিত পরিবাহী A ও B তড়িৎগতভাবে সংযুক্ত করা হলো। তাদের মধ্যে আধান দেবে-নেবে (চার্জ transfer হবে কি না) তা ঠিক করতে কোন রাশি বেশি গুরুত্বপূর্ণ: ভরের পরিমাণ/মোট আধান, নাকি তড়িৎ বিভব?
+HUMAN:তড়িৎ বিভব
+AI: তোমার আগের উত্তর ঠিক আছে।
+
+তড়িৎ বিভব (Chunk 1)
+সংযোগ দিলে আধান কেন সরবে—“চালিক শক্তি” কী?
+আমরা জানি, দুটি বস্তুকে (এখানে পরিবাহী) তড়িৎগতভাবে সংযুক্ত করলে তাদের মধ্যে আধান চলতে পারে। কিন্তু আধানের চলা মূলত কোন কিছুর উপর নির্ভর করে—এটাই মূল কথা।
+
+এই ধারণাটা বোঝাতে লেখাটিতে “তরল পাত্র সংযুক্ত করা”র মিল দেখানো হয়েছে:
+
+দুটি তরল পাত্র একই রকম হলে এবং নল দিয়ে সংযুক্ত করলে তরল প্রবাহ নির্ভর করে তরলের তলের উচ্চতার উপর—তরলের মোট পরিমাণের উপর নয়।
+উচ্চতা (উচ্চতার পার্থক্য) থাকলে প্রবাহ হবে; উচ্চতা সমান হলে প্রবাহ থেমে যাবে।
+ঠিক একইভাবে স্থির তড়িৎবিদ্যায় আধানের ক্ষেত্রে “সমতুল্য ভূমিকা” পালন করে তড়িৎ বিভব।
+
+দুটি পরিবাহী—ধরা যাক দুটোই ধনাত্মক আহিত
+ধরি,
+
+প্রথম পরিবাহী ধনাত্মকভাবে আহিত
+দ্বিতীয় পরিবাহীও ধনাত্মকভাবে আহিত
+প্রথমটির আধানের পরিমাণ বেশি, কিন্তু বিভব কম
+দ্বিতীয়টির আধানের পরিমাণ কম, কিন্তু বিভব বেশি
+প্রথমটির আকার বড় হওয়ায় এমন পরিস্থিতি হতে পারে (লেখায় এটাই বলা হয়েছে)
+এখন যদি আমরা দুই পরিবাহীকে তড়িৎগতভাবে সংযুক্ত করি, তাহলে লেখার বক্তব্য হলো:
+
+দ্বিতীয় পরিবাহী থেকে প্রথম পরিবাহীতে ধনাত্মক আধান প্রবাহিত হবে।
+এটা একটু অবাক লাগতে পারে, কারণ প্রথম পরিবাহীতে তো আধান বেশি—তবু প্রথমটি “আধান গ্রহণ” করে। এখানে আসল কারণ:
+
+যদিও প্রথমটির মোট আধান বেশি, কিন্তু তার বিভব কম।
+আধান তখনই চলতে চায় যখন দুইটির বিভবে পার্থক্য থাকে।
+প্রবাহ বন্ধ হয় কখন?
+আধান প্রবাহিত হতে হতে দুই পরিবাহীর বিভব সমান হয়। লেখা অনুযায়ী:
+
+আধানের প্রবাহ বন্ধ হয় যখন পরিবাহী দুটির বিভব সমান হয়।
+অর্থাৎ সংযোগের পর স্থির অবস্থায় এসে দাঁড়ায় এমন একটি অবস্থা যেখানে আর “বিভবের পার্থক্যজনিত চালনা” থাকে না—তাই আধান চলা বন্ধ হয়।
+
+মূল উপসংহার: আধানের প্রবাহ নির্ভর করে বিভবের উপর
+লেখাটির শেষ বক্তব্যটি খুব গুরুত্বপূর্ণ:
+
+আধানের প্রবাহ আধানের পরিমাণের উপর নির্ভর করে না—বিভবের উপর নির্ভর করে।
+এখানে “বিভব” বলতে মূলত সেই পরিমাপটাই বোঝানো হচ্ছে যেটার পার্থক্য থাকলে আধান চলবে এবং পার্থক্য দূর হলেই প্রবাহ থেমে যাবে।
+
+বড় মিল (সাধারণত্বের ভাব)
+লেখায় আরও বলা হয়েছে—দায়িত্বটা একই ধরনের নীতির:
+
+তাপবিজ্ঞানে তাপমাত্রার ভূমিকা
+উদস্থিতিবিদ্যায় তরলের মুক্ততলের ভূমিকা
+স্থির তড়িৎবিদ্যায় বিভবের ভূমিকা
+অর্থাৎ বিভিন্ন ক্ষেত্রে “প্রবাহ/রূপান্তর” চালায় যে রাশি, সেটা সংশ্লিষ্ট ব্যবস্থায় “সমতুল্যভাবে” ভিন্ন নামে থাকে—তবে চালিক শক্তি সবসময় সেই “পার্থক্য” (যেমন তাপমাত্রার পার্থক্য, উচ্চতার পার্থক্য, বিভবের পার্থক্য)।
+
+ইনটিউশন: আপনি দুই বালতিকে নল দিয়ে যুক্ত করলে—বালতিতে পানির মোট পরিমাণ দেখে নয়, দেখে উচ্চতার পার্থক্য। তড়িৎেও দুই পরিবাহীর ক্ষেত্রে “আধান কতটা আছে” দেখে নয়, দেখে বিভবের পার্থক্য—বিভব সমান হলেই “চালনা” শেষ, তাই প্রবাহ থেমে যায়।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: দুটি ধনাত্মকভাবে আহিত পরিবাহী সংযুক্ত করা হলো। প্রথমটার বিভব কম, দ্বিতীয়টার বিভব বেশি। সংযোগের পর আধানের প্রবাহ কোন দিকের হবে, এবং শেষ পর্যন্ত কখন প্রবাহ থামবে?
+HUMAN: তড়িৎ বিভব এর সাথে electron এর সম্পর্ক কি?
+AI: তড়িৎ বিভব (V) হলো প্রতি একক আধানের জন্য বিভবশক্তির পরিমাপ। অর্থাৎ কোনো বিন্দুতে ইলেকট্রনের বিভবশক্তি U হলে, 
+V
+=
+U
+/
+q
+V=U/q। এখানে ইলেকট্রনের আধান q = −e (ঋণাত্মক)। তাই ইলেকট্রন যখন বেশি বিভবের দিকে/কম বিভবের দিকে যায়, তখন তার উপর কাজ করা বৈদ্যুতিক বলের দিক নির্ভর করে বিভবের গ্রেডিয়েন্টের (−
+d
+V
+/
+d
+x
+dV/dx) সাথে আধানের চিহ্নের উপর।
+
+মনে রাখো: বৈদ্যুতিক ক্ষেত্র E = −∇V। ধনাত্মক আধানের উপর বল F = qE হলে, ঋণাত্মক আধান (ইলেকট্রন) এর বল হবে বিপরীত দিকে—কারণ q ঋণাত্মক। কিন্তু “চাই যে প্রবাহ হবে”—তা নির্ধারিত হয় তড়িৎ বিভবের পার্থক্য দিয়ে। যতক্ষণ দুই পরিবাহীর বিভব সমান না হয়, ততক্ষণ চার্জ (ইলেকট্রন/ধনাত্মক আধান—যেটাই চলতে পারে) চলতে থাকে; বিভব সমান হলে প্রবাহ থামে।
+
+এই কারণেই আমাদের বর্তমান পাঠে বলা হয়েছে: আধানের প্রবাহ/বিতরণ বিভব সমান হওয়া পর্যন্ত হয়, আর শেষ পর্যন্ত বিভব সমান হলেই প্রবাহ বন্ধ হয়—এটাই তড়িৎ বিভবের মূল ভূমিকা।
+
+আরেকভাবে ভাবলে: V বেশি মানে ঐ স্থানে (প্রতি একক আধানের) বিভবশক্তি বেশি। ইলেকট্রন যেহেতু ঋণাত্মক, তার জন্য বিভবশক্তি U = qV = (−e)V। তাই ইলেকট্রনের বিভবশক্তি কমাতে সে সেই দিকে যায় যেখানে V কম। এই ‘কম V-এর দিকে যাওয়ার প্রবণতা’ই বিভব পার্থক্য থাকার কারণে চার্জের গতি/প্রবাহ তৈরি করে।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: দুটি ধনাত্মকভাবে আহিত পরিবাহী সংযুক্ত করা হলো। প্রথমটার বিভব কম, দ্বিতীয়টার বিভব বেশি। সংযোগের পর আধানের প্রবাহ কোন দিকের হবে, এবং শেষ পর্যন্ত কখন প্রবাহ থামবে?
+HUMAN: give me a math problem related to this
+AI: তোমার আগের উত্তর পুরোপুরি ঠিক হয়নি। আবার সহজভাবে দেখি।
+
+তড়িৎ বিভব (Static Electricity)
+ধরা যাক, দুটি পরিবাহী ধনাত্মকভাবে আহিত। তাদের মধ্যে আধান (চার্জ) প্রবাহ হবে কোনটি বেশি বিভব (potential) বা কোনটি কম বিভব—তার উপর।
+
+1) পানি দিয়ে ভাবলে বিভবের ধারণা
+টপিকটা বুঝতে একটি তুলনা দেয়া হয়েছে—
+
+ঠিক যেমন দুটি তরল পাত্রকে নল দিয়ে সংযুক্ত করলে তরল প্রবাহ হয় তরল তলের উচ্চতার পার্থক্যের কারণে,
+তেমনি দুটি পরিবাহীকে সংযুক্ত করলে আধান প্রবাহ হয় বিভবের পার্থক্যের কারণে।
+এখানে “ড্রাইভিং ফোর্স” হলো পার্থক্যটা—
+
+তরলের ক্ষেত্রে: উচ্চতার পার্থক্য
+তড়িৎ ক্ষেত্রে: বিভবের পার্থক্য
+2) দেয়া পরিস্থিতি: আধান বেশি কিন্তু বিভব কম
+এখন ধরি—
+
+প্রথম পরিবাহীতে আধান বেশি কিন্তু বিভব কম
+দ্বিতীয় পরিবাহীতে আধান কম কিন্তু বিভব বেশি
+এবং সম্ভব, কারণ প্রথমটির আকার বড় (বড় হলে একই পরিমাণ আধানেও বিভব কম হতে পারে—যদিও এখানে মূল বক্তব্যটা বিভবের পার্থক্য নিয়েই)
+3) সংযোগ দিলে আধান কোন দিক দিয়ে যাবে?
+যদি দুই পরিবাহীকে তড়িৎগতভাবে সংযুক্ত করা হয় (যেমন তার দিয়ে), তখন দেখা যায়:
+
+দ্বিতীয় পরিবাহী থেকে প্রথম পরিবাহীতে ধনাত্মক আধান প্রবাহিত হবে।
+কারণ ধনাত্মক আধান চলতে চায় এমন দিকের দিকে যেখানে কম বিভব থেকে বেশি বিভবের দিকে সমতা আসে—এবং শেষ পর্যন্ত বিভব সমান হয়ে যায়।
+
+গুরুত্বপূর্ণ কথা: আধানের পরিমাণ বেশি হলেও যদি বিভব কম হয়, তবুও সেটি আধান গ্রহণ করতে পারে।
+
+4) কখন আধানের প্রবাহ থামবে?
+আধান প্রবাহ চলতে থাকে যতক্ষণ না:
+
+দুই পরিবাহীর বিভব সমান হয়।
+যখন বিভব সমান হয়ে যায়, তখন আর বিভবের পার্থক্য থাকে না—তাই আধানের প্রবাহ বন্ধ হয়ে যায়।
+
+5) উপসংহার: প্রবাহ নির্ভর করে আধানের উপর নয়, বিভবের উপর
+সুতরাং টপিকের মূল ফলাফল হলো:
+
+আধানের প্রবাহ আধানের পরিমাণের উপর নির্ভর করে না
+আধানের প্রবাহ নির্ভর করে বিভবের উপর (বিশেষ করে দুই বস্তুর বিভবের পার্থক্যের উপর)
+6) তিনটি ক্ষেত্রের মিল (তাপ, উদস্থিতিবিদ্যা, স্থির তড়িৎ)
+টপিকটি শেষে একটা সামঞ্জস্য বলছে:
+
+তাপবিজ্ঞানে তাপমাত্রা
+উদস্থিতিবিদ্যায় তরলের মুক্ততল 
+(
+h
+e
+i
+g
+h
+t
+/
+l
+e
+v
+e
+l
+(height/level)
+স্থির তড়িৎবিদ্যায় বিভব
+তিন ক্ষেত্রেই প্রবাহ/পরিবর্তন ঘটে যেই “ড্রাইভিং ভ্যারিয়েবল”-এ পার্থক্য থাকে সেটার জন্য।
+
+সহজ ভাবনা: বিভবটা যেন “ঢাল” (slope) বা “চাপ/উঁচু-নিচু অবস্থান”। বেশি আধান থাকলেই সবসময় “প্রবাহের দিক” ঠিক হয় না—দিক ঠিক হয় উঁচু/কম উঁচুর (বিভবের) পার্থক্যে।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: একটি পরিবাহীতে 
+Q
+1
+Q 
+1
+​
+  আধান বেশি কিন্তু বিভব 
+V
+1
+V 
+1
+​
+  কম, অন্যটিতে 
+Q
+2
+Q 
+2
+​
+  আধান কম কিন্তু বিভব 
+V
+2
+V 
+2
+​
+  বেশি। সংযোগ দিলে আধান কোন পরিবাহী থেকে কোনটিতে প্রবাহিত হবে এবং প্রবাহ কখন থামবে?
+HUMAN: V 2 theke V 1 er dike. will stop when 
+V
+1
+=
+V
+2.
+V1=V2.
+AI: হ্যাঁ—আপনার কথাটাই সঠিক। শুরুতে যেহেতু দ্বিতীয়টির বিভব বেশি (V2 বেশি, V1 কম), তাই সংযোগের পর আধান দ্বিতীয় পরিবাহী থেকে প্রথম পরিবাহীতে প্রবাহিত হয়। আধানের প্রবাহ চলতে থাকবে যতক্ষণ না দুই পরিবাহীর বিভব সমান হয়। অর্থাৎ শেষ অবস্থা হবে: V1 = V2 হলে প্রবাহ থেমে যাবে।
+
+সংযোগ করলে চার্জ সবসময় উচ্চ বিভব (high potential) থেকে নিম্ন বিভব (low potential)-এর দিকে সরে যায়, যাতে শেষ পর্যন্ত বিভবের পার্থক্য শূন্য হয়। চার্জ বেশি থাকলেও বিভব কম হলে (V কম) সে চার্জ গ্রহণ করতে পারে—কারণ তড়িৎগত শক্তি/ড্রাইভ মূলত বিভবের পার্থক্য থেকেই আসে।
+
+তোমার উত্তর ঠিক হলে, এরপর আমরা Chunk 1 ব্যাখ্যা করব।
+
+ছোট প্রশ্ন: একটি পরিবাহীতে 
+Q
+1
+Q 
+1
+​
+  আধান বেশি কিন্তু বিভব 
+V
+1
+V 
+1
+​
+  কম, অন্যটিতে 
+Q
+2
+Q 
+2
+​
+  আধান কম কিন্তু বিভব 
+V
+2
+V 
+2
+​
+  বেশি। সংযোগ দিলে আধান কোন পরিবাহী থেকে কোনটিতে প্রবাহিত হবে এবং প্রবাহ কখন থামবে?
+
+This is a chat under lesson content "তড়িৎ বিভব (Electric Potential)" in the course "স্থির তড়িৎবিদ্যা (Electrostatics)".
+The system makes mistake and the chat still feels very static. Please make the chat more dynamic and engaging by asking follow-up questions, providing examples, or encouraging the user to think critically about the topic.Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"b","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"B থেকে A","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"positive charge high potential theke low potential e jay, electron ulta dike jay","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"তড়িৎ বিভবের সাথে electron এর relation কী?","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"give me a simple math problem related to this","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"ধনাত্মক আধান +10V থেকে +4V দিকে যাবে।","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"ধনাত্মক আধান প্রবাহিত হবে।","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"10V theke 4V er dike.","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"তড়িৎ বিভবের সাথে electron এর relation কী?","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"A theke B, +12V theke +5V.","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"A theke B, +12V theke +5V.","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"তড়িৎ বিভবের সাথে electron এর relation কী?","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"বিভবের পার্থক্য","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"give me a simple math problem related to this","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"ধনাত্মক আধান বেশি বিভব থেকে কম বিভবে যাবে; বিভব সমান হলে থামবে।","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"চিত্র দিয়ে একবার বোঝাও","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"higher V theke lower V dike.","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"তড়িৎ বিভবের সাথে electron এর relation কী?","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"বিভবের পার্থক্য","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"give me a simple math problem related to this","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"ধনাত্মক আধান বেশি বিভব থেকে কম বিভবে যাবে।","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"চিত্র দিয়ে একবার বোঝাও","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"fine","user_id":"69c409f3dffc7e345613547f","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"groq:openai/gpt-oss-120b"}
+Incoming request: {"message":"start","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"torit bolorekhar dik","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"+ theke - er dik","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"তড়িৎ বলরেখার স্পর্শক **ঐ বিন্দুতে তড়িৎ প্রাবল্য \\(\\vec{E}\\)-এর দিক** নির্দেশ করে।  \n\nঅর্থাৎ, স্পর্শকের দিক বরাবর একটি ধনাত্মক আধান ওই বিন্দুতে বল লাভ করে এবং সেদিকে ত্বরান্বিত হয়।","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"fine","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"ছোট আধানটির কাছে বেশি থাকবে।","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"shomantoral","user_id":"69a404b1f576e540aeca194a","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
