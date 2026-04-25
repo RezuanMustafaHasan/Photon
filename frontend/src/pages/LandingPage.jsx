@@ -59,7 +59,7 @@ const LandingPage = () => {
                   onClick={() => navigate('/signup')}
                   className="btn custom-gradient-btn text-white fw-bold rounded-pill px-4 py-2 hover-translate-y"
                 >
-                  Start Free Trial
+                  Register
                 </button>
               </li>
             </ul>
@@ -98,8 +98,8 @@ const LandingPage = () => {
 
           {/* Subheadline */}
           <p className="lead text-secondary mb-5 mx-auto" style={{ maxWidth: '600px', fontSize: '1.25rem' }}>
-            Let us handle the grading so you can focus on your students.
-            Save 90% of your grading time and give students better, faster feedback.
+            Get your personal physics tutor for instant concept breakdowns and step-by-step help.
+            Learn smarter with targeted guidance that turns confusion into confidence.
           </p>
 
           {/* CTA Buttons */}
@@ -186,7 +186,7 @@ const LandingPage = () => {
                   <h3 className="h5 fw-bold text-primary mb-0">Free</h3>
                   <span className="badge bg-orange-50 border border-orange-100 text-primary rounded-pill px-3 py-2">Starter</span>
                 </div>
-                <div className="display-6 fw-bold text-primary mb-3">$0</div>
+                <div className="display-6 fw-bold text-primary mb-3">0৳</div>
                 <ul className="text-secondary mb-4 ps-3">
                   <li className="mb-2">Core explanations</li>
                   <li className="mb-2">Practice prompts</li>
@@ -207,7 +207,7 @@ const LandingPage = () => {
                   <h3 className="h5 fw-bold text-primary mb-0">Pro</h3>
                   <span className="badge bg-orange-50 border border-orange-100 text-primary rounded-pill px-3 py-2">Best value</span>
                 </div>
-                <div className="display-6 fw-bold text-primary mb-3">$9</div>
+                <div className="display-6 fw-bold text-primary mb-3">600৳</div>
                 <ul className="text-secondary mb-4 ps-3">
                   <li className="mb-2">Everything in Free</li>
                   <li className="mb-2">Deeper explanations</li>

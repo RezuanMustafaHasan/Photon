@@ -20,6 +20,7 @@ const hasEvidence = (entry) => (
   asCount(entry?.questionAttempts) > 0
   || asCount(entry?.chatConfusionCount) > 0
   || asCount(entry?.lessonTimeSeconds) > 0
+  || Boolean(entry?.lessonCompletedAt)
 );
 
 export const getMasteryStatus = (score, entry) => {
@@ -39,6 +40,10 @@ export const getMasteryStatus = (score, entry) => {
 };
 
 export const computeMasteryScore = (entry, now = new Date()) => {
+  if (entry?.lessonCompletedAt) {
+    return 100;
+  }
+
   const questionAttempts = asCount(entry?.questionAttempts);
   const correctAnswers = asCount(entry?.correctAnswers);
   const wrongAnswers = asCount(entry?.wrongAnswers);
@@ -164,6 +169,20 @@ export const recordLessonActivity = async ({ userId, chapterName, lessonName, se
   return saveWithRecomputedScore(doc, now);
 };
 
+export const recordLessonCompletion = async ({ userId, chapterName, lessonName }) => {
+  const doc = await ensureMasteryDoc({ userId, chapterName, lessonName });
+  if (!doc) {
+    return null;
+  }
+
+  const now = new Date();
+  doc.lessonCompletedAt = doc.lessonCompletedAt || now;
+  doc.lastLessonSeenAt = now;
+  doc.lastActivityAt = now;
+
+  return saveWithRecomputedScore(doc, now);
+};
+
 export const recordChatConfusion = async ({ userId, chapterName, lessonName, message }) => {
   if (!detectChatConfusion(message)) {
     return false;
@@ -275,6 +294,7 @@ export const getMasterySummary = async ({ userId }) => {
         lastActivityAt: doc?.lastActivityAt || null,
         lastExamAt: doc?.lastExamAt || null,
         lastLessonSeenAt: doc?.lastLessonSeenAt || null,
+        lessonCompletedAt: doc?.lessonCompletedAt || null,
       };
       const masteryScore = computeMasteryScore(base);
 
@@ -314,6 +334,7 @@ export const getMasterySummary = async ({ userId }) => {
         lastActivityAt: lesson.lastActivityAt,
         lastExamAt: lesson.lastExamAt,
         lastLessonSeenAt: lesson.lastLessonSeenAt,
+        lessonCompletedAt: lesson.lessonCompletedAt,
         reason: lesson.reason,
       })),
     };

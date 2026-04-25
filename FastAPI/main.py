@@ -90,6 +90,7 @@ class ChatResponse(BaseModel):
     textbook_answer: str = ""
     extra_explanation: str = ""
     citations: list[ChatCitation] = Field(default_factory=list)
+    lesson_complete: bool = False
 
 
 class HistoryResponse(BaseModel):
@@ -231,6 +232,7 @@ async def chat(payload: ChatRequest):
     extra_explanation = str(response_payload.get("extra_explanation") or "")
     check_question = str(response_payload.get("check_question") or "")
     citations = response_payload.get("citations") or []
+    lesson_complete = bool((thread_state or {}).get("lesson_complete"))
     if not isinstance(response_images, list):
         response_images = []
 
@@ -278,6 +280,7 @@ async def chat(payload: ChatRequest):
         textbook_answer=textbook_answer,
         extra_explanation=extra_explanation,
         citations=citations if isinstance(citations, list) else [],
+        lesson_complete=lesson_complete,
     )
 
 

@@ -78,6 +78,7 @@ export const normalizeAssistantPayload = (value, chapterFallback = '', lessonFal
     extraExplanation,
     citations,
     images,
+    lessonComplete: Boolean(value?.lessonComplete ?? value?.lesson_complete),
   };
 };
 

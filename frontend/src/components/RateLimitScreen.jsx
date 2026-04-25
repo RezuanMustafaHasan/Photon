@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatRateLimitWait, getRateLimitRemainingSeconds } from '../utils/rateLimit.js';
 
 const RateLimitScreen = ({ notice }) => {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
 
   const remainingSeconds = useMemo(
-    () => getRateLimitRemainingSeconds(notice, now),
+    () => (now > 0
+      ? getRateLimitRemainingSeconds(notice, now)
+      : Math.max(0, Number(notice?.retryAfterSeconds) || 0)),
     [notice, now],
   );
 

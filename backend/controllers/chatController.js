@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { recordChatConfusion } from '../util/mastery.js';
+import { recordChatConfusion, recordLessonCompletion } from '../util/mastery.js';
 import { refreshRevisionTasks } from '../util/revision.js';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
@@ -84,6 +84,7 @@ export const mapUpstreamChatResponse = (value) => {
     extraExplanation: normalizeString(value?.extra_explanation ?? value?.extraExplanation),
     citations,
     images,
+    lessonComplete: Boolean(value?.lesson_complete ?? value?.lessonComplete),
   };
 };
 
@@ -170,6 +171,25 @@ export const chat = async (req, res) => {
       return;
     }
 
+    const mappedResponse = mapUpstreamChatResponse(data);
+
+    if (mappedResponse.lessonComplete) {
+      const activity = await recordLessonCompletion({
+        userId,
+        chapterName,
+        lessonName,
+      }).catch((error) => {
+        logBestEffortError('Mastery lesson completion error:', error);
+        return null;
+      });
+
+      if (activity) {
+        refreshRevisionTasks({ userId }).catch((error) => {
+          logBestEffortError('Revision refresh after lesson completion error:', error);
+        });
+      }
+    }
+
     recordChatConfusion({
       userId,
       chapterName,
@@ -184,7 +204,7 @@ export const chat = async (req, res) => {
       logBestEffortError('Mastery chat signal error:', error);
     });
 
-    res.json(mapUpstreamChatResponse(data));
+    res.json(mappedResponse);
   } catch {
     console.log(
       `[chat] backend error user=${userId} lesson=${lessonName} total_ms=${Date.now() - requestStartedAt}`,
