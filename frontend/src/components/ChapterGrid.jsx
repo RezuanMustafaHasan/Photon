@@ -23,16 +23,15 @@ const ChapterGrid = ({ chapters, status, error, onChapterClick }) => {
         <div className="text-secondary mb-3">No chapters are available yet.</div>
       )}
 
-      <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-4 row-cols-xl-5 g-4">
+      <div className="chapter-grid">
         {safeChapters.map((chapter) => (
-          <div key={chapter.chapterName} className="col">
-            <ChapterCard
-              title={chapter.chapterName}
-              status={chapter.status}
-              progress={chapter.masteryScore}
-              onClick={() => onChapterClick(chapter.chapterName)}
-            />
-          </div>
+          <ChapterCard
+            key={chapter.chapterName}
+            title={chapter.chapterName}
+            status={chapter.status}
+            progress={chapter.masteryScore}
+            onClick={() => onChapterClick(chapter.chapterName)}
+          />
         ))}
       </div>
     </div>

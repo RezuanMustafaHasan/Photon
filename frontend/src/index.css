@@ -327,6 +327,46 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateY(-1px);
 }
 
+.chapter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.chapter-card {
+  height: 19.5rem;
+  padding: 1.5rem;
+}
+
+.chapter-card__title {
+  height: 7.25rem;
+}
+
+.chapter-card__title h4 {
+  font-size: 1.45rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.chapter-card__actions {
+  min-height: 6.9rem;
+}
+
+.chapter-card__button {
+  min-height: 3.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+@media (max-width: 575.98px) {
+  .chapter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Hover Utilities */
 .hover-bg-gray-50:hover {
   background-color: #f9fafb !important;

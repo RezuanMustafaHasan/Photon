@@ -20,3 +20,7 @@ Incoming request: {"message":"bivob r bivob parthokko ki same?","user_id":"69ec8
 Incoming request: {"message":"adhan ki?","user_id":"69ec8c2171f5e149f5b47bd5","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
 Incoming request: {"message":"give me a math problem","user_id":"69ec8c2171f5e149f5b47bd5","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
 Incoming request: {"message":"fine","user_id":"69ec8c2171f5e149f5b47bd5","chapter_name":"Static Electricity","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"স্থির তড়িৎ","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"bivob shoman hole","user_id":"69c409f3dffc7e345613547f","chapter_name":"স্থির তড়িৎ","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"উচ্চ বিভব দিক \n(\nকম\n−\nঋণাত্মক\n(কম−ঋণাত্মক) থেকে নিম্ন বিভব দিক \n(\nবেশি\n−\nঋণাত্মক\n(বেশি−ঋণাত্মক) দিকে","user_id":"69c409f3dffc7e345613547f","chapter_name":"স্থির তড়িৎ","lesson_name":"তড়িৎ বিভব","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
+Incoming request: {"message":"start","user_id":"69c409f3dffc7e345613547f","chapter_name":"স্থির তড়িৎ","lesson_name":"তড়িৎ বলরেখা","history_mode":"default","chat_model":"openai:gpt-5.4-nano"}
