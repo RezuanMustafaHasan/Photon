@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { CHAT_MODEL_OPTIONS } from '../constants/chatModels.js';
 import { createRateLimitNotice } from '../utils/rateLimit.js';
 import { normalizeRichText } from '../utils/richText.js';
 
@@ -14,6 +15,23 @@ const MIN_QUESTION_COUNT = 1;
 const MAX_QUESTION_COUNT = 50;
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 const BANGLA_REGEX = /[\u0980-\u09FF]/;
+const EXAM_MODEL_STORAGE_KEY = 'photon_exam_model';
+const DEFAULT_EXAM_MODEL = 'openai:gpt-5.4-nano';
+
+const normalizeExamModel = (value) => {
+  if (CHAT_MODEL_OPTIONS.some((option) => option.value === value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (/^(openai|groq):.+$/i.test(normalized)) {
+      return normalized;
+    }
+  }
+
+  return DEFAULT_EXAM_MODEL;
+};
 
 const getBanglaClass = (value) => (BANGLA_REGEX.test(String(value || '')) ? 'font-bangla' : '');
 
@@ -172,6 +190,13 @@ const ExamPage = () => {
   const [questionCountMode, setQuestionCountMode] = useState('preset');
   const [questionCount, setQuestionCount] = useState(20);
   const [customQuestionCount, setCustomQuestionCount] = useState('20');
+  const [examModel, setExamModel] = useState(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_EXAM_MODEL;
+    }
+
+    return normalizeExamModel(window.localStorage.getItem(EXAM_MODEL_STORAGE_KEY));
+  });
   const [builderError, setBuilderError] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -297,6 +322,14 @@ const ExamPage = () => {
   }, [fetchExamHistory]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(EXAM_MODEL_STORAGE_KEY, examModel);
+  }, [examModel]);
+
+  useEffect(() => {
     if (!preselectedChapter) {
       return;
     }
@@ -384,6 +417,9 @@ const ExamPage = () => {
   const resolvedQuestionCount = questionCountMode === 'custom'
     ? (isCustomQuestionCountValid ? parsedCustomQuestionCount : null)
     : questionCount;
+  const selectedExamModelLabel = useMemo(() => (
+    CHAT_MODEL_OPTIONS.find((option) => option.value === examModel)?.label || examModel
+  ), [examModel]);
 
   const answeredCount = activeAttempt ? Object.keys(activeAttempt.answers).length : 0;
   const hasFinishedActiveAttempt = Boolean(activeAttempt && answeredCount === activeAttempt.questions.length);
@@ -613,6 +649,7 @@ const ExamPage = () => {
         body: JSON.stringify({
           selections,
           questionCount: resolvedQuestionCount,
+          examModel,
         }),
       });
 
@@ -803,10 +840,33 @@ const ExamPage = () => {
               </div>
             )}
 
+            <div className="mb-4">
+              <label className="form-label small fw-semibold text-secondary text-uppercase">
+                Exam LLM
+              </label>
+              <select
+                value={examModel}
+                onChange={(event) => {
+                  setExamModel(normalizeExamModel(event.target.value));
+                  setBuilderError('');
+                }}
+                className="form-select border-gray-200 rounded-3 focus-ring-orange"
+              >
+                {CHAT_MODEL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <div className="small text-secondary mt-2">
+                Default: OpenAI · GPT-5.4 Nano
+              </div>
+            </div>
+
             <div className="small fw-semibold text-secondary text-uppercase mb-2">Ready to generate</div>
             <div className="text-secondary mb-4">
               Photon will create exactly <span className="fw-semibold text-primary">{resolvedQuestionCount || '...'}</span> MCQ
-              questions from your selected topics.
+              questions from your selected topics using <span className="fw-semibold text-primary">{selectedExamModelLabel}</span>.
             </div>
 
             {builderError && (

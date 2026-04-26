@@ -9,11 +9,23 @@ from langchain_groq import ChatGroq
 from graph.llm_logging import invoke_llm_with_logging
 
 
+DEFAULT_EXAM_MODEL = "openai:gpt-5.4-nano"
+DEFAULT_EXAM_MODEL_CONFIG = {
+    "id": DEFAULT_EXAM_MODEL,
+    "provider": "openai",
+    "model": "gpt-5.4-nano",
+}
+INVALID_JSON_BACKSLASH_PATTERN = re.compile(r'(?<!\\)\\(?!["\\/bfnrtu])')
+LATEX_COMMAND_BACKSLASH_PATTERN = re.compile(
+    r"(?<!\\)\\(?=(?:frac|int|sum|sqrt|cdot|times|left|right|vec|hat|theta|phi|pi|alpha|beta|gamma|lambda|mu|nu|rho|sigma|omega|Delta|delta|tau|sin|cos|tan|text|mathrm|mathbf|pm|quad|qquad|leq|geq|neq|approx)\\b)"
+)
+
 EXAM_SYSTEM_PROMPT = (
-    "You generate multiple-choice exams for Bangladeshi HSC Physics students.\n"
-    "Use only the provided lesson content.\n"
+    "You are a Bangladeshi HSC physics tutor.\n"
+    "Generate multiple-choice exams for Bangladeshi HSC Physics students.\n"
+    "Use only the provided chapter/topic names.\n"
     "Return valid JSON only. Do not include markdown, commentary, or code fences.\n"
-    "Every question must be answerable from the provided lesson content.\n"
+    "Every question must stay on the provided topics.\n"
     "Prefer Bangla when the source lessons are primarily Bangla, otherwise match the lesson language.\n"
     "Create plausible distractors, avoid repeated questions, and never use 'all of the above' or 'none of the above'.\n"
     "Use clean exam formatting: keep questions concise, keep options short, and avoid noisy prefixes like 'Question:' or 'Option A:'.\n"
@@ -25,11 +37,58 @@ EXAM_SYSTEM_PROMPT = (
 )
 
 
-def get_exam_llm():
+def parse_exam_model_config(selected_model=None):
+    requested = str(selected_model or "").strip()
+    if not requested:
+        return dict(DEFAULT_EXAM_MODEL_CONFIG)
+
+    provider = ""
+    model = ""
+    if ":" in requested:
+        provider, model = requested.split(":", 1)
+        provider = provider.strip().lower()
+        model = model.strip()
+
+    if provider in {"openai", "groq"} and model:
+        return {
+            "id": f"{provider}:{model}",
+            "provider": provider,
+            "model": model,
+        }
+
+    return dict(DEFAULT_EXAM_MODEL_CONFIG)
+
+
+def resolve_exam_model_id(selected_model=None):
+    return parse_exam_model_config(selected_model)["id"]
+
+
+def get_missing_exam_model_key_message(selected_model=None):
+    provider = parse_exam_model_config(selected_model)["provider"]
+    if provider == "openai":
+        return "OPENAI_API_KEY is not set"
+    return "GROQ_API_KEY is not set"
+
+
+def get_exam_llm(selected_model=None):
+    model_config = parse_exam_model_config(selected_model)
+
+    if model_config["provider"] == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            from langchain_openai import ChatOpenAI
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise ValueError("langchain-openai is not installed") from exc
+
+        return ChatOpenAI(model=model_config["model"], api_key=api_key, temperature=0)
+
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
-    return ChatGroq(model="openai/gpt-oss-120b", api_key=api_key)
+    return ChatGroq(model=model_config["model"], api_key=api_key, temperature=0)
 
 
 def extract_text_content(content):
@@ -49,8 +108,19 @@ def extract_text_content(content):
 
 
 def build_exam_prompt(selected_lessons, question_count, previous_error=None, previous_output=None):
-    lesson_context = json.dumps(selected_lessons, ensure_ascii=False)
+    topic_list = []
+    for lesson in selected_lessons:
+        chapter_name = str(lesson.get("chapter_name") or "").strip()
+        topic_name = str(lesson.get("topic_name") or "").strip()
+        if chapter_name and topic_name:
+            topic_list.append(f"{chapter_name} - {topic_name}")
+
+    topic_summary = ", ".join(topic_list)
+    topic_context = json.dumps(selected_lessons, ensure_ascii=False)
+
     prompt = (
+        "You are a Bangladeshi HSC physics tutor. "
+        f"Generate exactly {question_count} MCQ questions on the selected topics: {topic_summary}.\n"
         f"Generate exactly {question_count} MCQ questions.\n"
         "Return JSON with this exact schema:\n"
         "{\n"
@@ -68,10 +138,11 @@ def build_exam_prompt(selected_lessons, question_count, previous_error=None, pre
         f"- The JSON must contain exactly {question_count} questions.\n"
         "- Each question must have exactly 4 non-empty options.\n"
         "- correct_option_index must be an integer from 0 to 3.\n"
-        "- Use chapter_name and topic_name exactly from the provided lesson context.\n"
-        "- Cover the selected lessons as evenly as possible.\n"
+        "- Use chapter_name and topic_name exactly from the provided selected topics list.\n"
+        "- Cover the selected topics as evenly as possible.\n"
         "- Do not repeat the same question.\n"
-        "- Do not mention that the content came from a lesson.\n"
+        "- Keep each question strictly within the provided topics.\n"
+        "- Do not mention that the topics came from a selection list.\n"
         "- Keep each option to a single concise statement, not a paragraph.\n"
         "- Do not prefix options with A, B, C, D, numbers, bullets, or labels like 'Option'.\n"
         "- Do not prefix questions with labels like 'Q', 'Question', or numbering.\n"
@@ -81,7 +152,7 @@ def build_exam_prompt(selected_lessons, question_count, previous_error=None, pre
         "- Never output raw escaped delimiters like \\(...\\) or \\[...\\].\n"
         "- Avoid markdown headings, tables, code fences, and decorative symbols.\n"
         "- Output JSON only.\n\n"
-        f"Lesson context:\n{lesson_context}"
+        f"Selected topics (chapter/topic names only):\n{topic_context}"
     )
 
     if previous_error:
@@ -116,6 +187,30 @@ def extract_json_text(raw_text):
         return text[array_start:array_end + 1]
 
     raise ValueError("The AI response did not contain valid JSON.")
+
+
+def repair_invalid_json_backslashes(value):
+    text = str(value or "")
+    text = LATEX_COMMAND_BACKSLASH_PATTERN.sub(r"\\\\", text)
+    return INVALID_JSON_BACKSLASH_PATTERN.sub(r"\\\\", text)
+
+
+def load_json_with_escape_repair(json_text, max_repairs=256):
+    candidate = str(json_text or "")
+    repairs = 0
+
+    while True:
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            if not str(exc.msg).startswith("Invalid \\"):
+                raise
+
+            if repairs >= max_repairs or exc.pos < 0 or exc.pos > len(candidate):
+                raise
+
+            candidate = candidate[:exc.pos] + "\\" + candidate[exc.pos:]
+            repairs += 1
 
 
 def normalize_title(value):
@@ -179,10 +274,10 @@ def normalize_error_message(exc):
 
 
 def parse_questions_payload(raw_text, selected_lessons, question_count):
-    json_text = extract_json_text(raw_text)
+    json_text = repair_invalid_json_backslashes(extract_json_text(raw_text))
 
     try:
-        payload = json.loads(json_text)
+        payload = load_json_with_escape_repair(json_text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"The AI returned malformed JSON: {exc.msg}.") from exc
 
@@ -267,10 +362,10 @@ def parse_questions_payload(raw_text, selected_lessons, question_count):
     return parsed_questions
 
 
-def generate_exam(selected_lessons, question_count):
-    llm = get_exam_llm()
+def generate_exam(selected_lessons, question_count, selected_model=None):
+    llm = get_exam_llm(selected_model)
     if llm is None:
-        raise ValueError("GROQ_API_KEY is not set")
+        raise ValueError(get_missing_exam_model_key_message(selected_model))
 
     last_error = None
     previous_output = None
@@ -294,6 +389,7 @@ def generate_exam(selected_lessons, question_count):
                 metadata={
                     "question_count": question_count,
                     "attempt": 2 if last_error else 1,
+                    "exam_model": resolve_exam_model_id(selected_model),
                 },
             )
         except Exception as exc:

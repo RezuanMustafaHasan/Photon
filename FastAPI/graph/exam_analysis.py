@@ -3,7 +3,13 @@ import json
 from pydantic import ValidationError
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from graph.exam_generator import extract_json_text, extract_text_content, get_exam_llm, normalize_error_message
+from graph.exam_generator import (
+    extract_json_text,
+    extract_text_content,
+    get_exam_llm,
+    get_missing_exam_model_key_message,
+    normalize_error_message,
+)
 from graph.llm_logging import invoke_llm_with_logging
 
 
@@ -56,7 +62,7 @@ def validate_summary_payload(payload, SummaryModel):
 def analyze_exam_attempt(payload, SummaryModel):
     llm = get_exam_llm()
     if llm is None:
-        raise ValueError("GROQ_API_KEY is not set")
+        raise ValueError(get_missing_exam_model_key_message())
 
     payload_json = json.dumps(payload, ensure_ascii=False)
     prompt = build_exam_analysis_prompt(payload_json)

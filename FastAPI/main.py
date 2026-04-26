@@ -109,6 +109,7 @@ class ExamSelection(BaseModel):
 class ExamGenerateRequest(BaseModel):
     selections: list[ExamSelection]
     questionCount: int
+    examModel: str | None = None
 
 
 class ExamQuestion(BaseModel):
@@ -315,12 +316,12 @@ async def generate_exam_route(payload: ExamGenerateRequest):
     if not selections:
         raise HTTPException(status_code=400, detail="At least one selected topic is required")
 
-    selected_lessons = load_selected_lessons(selections)
-    if not selected_lessons:
+    selected_topics = build_selected_exam_topics(selections)
+    if not selected_topics:
         raise HTTPException(status_code=404, detail="Selected lessons were not found")
 
     try:
-        questions = generate_exam(selected_lessons, payload.questionCount)
+        questions = generate_exam(selected_topics, payload.questionCount, payload.examModel)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -492,6 +493,24 @@ def sanitize_exam_selections(raw_selections):
             seen_topics.add(topic_key)
 
     return [item for item in merged.values() if item["topicNames"]]
+
+
+def build_selected_exam_topics(selections):
+    selected_topics = []
+    for selection in selections:
+        chapter_name = str(selection.get("chapterName") or "").strip()
+        for topic_name in selection.get("topicNames") or []:
+            topic_label = str(topic_name or "").strip()
+            if not chapter_name or not topic_label:
+                continue
+            selected_topics.append(
+                {
+                    "chapter_name": chapter_name,
+                    "topic_name": topic_label,
+                }
+            )
+
+    return selected_topics
 
 
 def get_lesson_label(lesson, fallback):
