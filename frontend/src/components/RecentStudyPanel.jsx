@@ -71,9 +71,6 @@ const RecentStudyPanel = ({ summary, status, error, onResumeLesson }) => {
                     <span className="px-3 py-1 rounded-pill bg-orange-50 border border-orange-100 text-primary small fw-semibold">
                       {formatLastStudied(item.lastStudiedAt)}
                     </span>
-                    <span className="px-3 py-1 rounded-pill bg-gray-50 text-secondary small fw-semibold">
-                      Mastery {item.masteryScore}%
-                    </span>
                   </div>
 
                   <div className="small text-secondary">

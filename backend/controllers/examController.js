@@ -8,6 +8,7 @@ const FASTAPI_EXAM_URL = `${FASTAPI_BASE_URL}/exam/generate`;
 const FASTAPI_ANALYZE_URL = `${FASTAPI_BASE_URL}/exam/analyze`;
 const MIN_QUESTION_COUNT = 1;
 const MAX_QUESTION_COUNT = 50;
+const DEFAULT_EXAM_MODEL = 'openai:gpt-5.4-nano';
 
 const logBestEffortError = (label, error) => {
   if (error?.name === 'MongoClientClosedError') {
@@ -60,6 +61,19 @@ const sanitizeSelections = (rawSelections) => {
       topicNames: Array.from(topicMap.values()),
     }))
     .filter((selection) => selection.topicNames.length > 0);
+};
+
+const sanitizeExamModel = (rawModel) => {
+  const value = String(rawModel || '').trim();
+  if (!value) {
+    return DEFAULT_EXAM_MODEL;
+  }
+
+  if (/^(openai|groq):.+$/i.test(value)) {
+    return value;
+  }
+
+  return DEFAULT_EXAM_MODEL;
 };
 
 const parseUserId = (value) => {
@@ -223,6 +237,7 @@ const formatAttemptDetail = (attempt) => ({
 export const generateExam = async (req, res) => {
   const questionCount = Number(req.body?.questionCount);
   const selections = sanitizeSelections(req.body?.selections);
+  const examModel = sanitizeExamModel(req.body?.examModel);
 
   if (!validateQuestionCount(questionCount)) {
     res.status(400).json({ message: `questionCount must be an integer between ${MIN_QUESTION_COUNT} and ${MAX_QUESTION_COUNT}.` });
@@ -241,7 +256,7 @@ export const generateExam = async (req, res) => {
     const upstream = await fetch(FASTAPI_EXAM_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selections, questionCount }),
+      body: JSON.stringify({ selections, questionCount, examModel }),
       signal: controller.signal,
     });
 

@@ -29,6 +29,7 @@ const ChatWindow = ({
   rateLimitNotice,
   setRateLimitNotice,
   onSourceClick,
+  onLessonCompleted,
 }) => {
   const { token, user, showRateLimitNotice } = useAuth();
   const [draft, setDraft] = useState('');
@@ -124,6 +125,10 @@ const ChatWindow = ({
       }
       if (!res.ok) {
         throw new Error(data?.message || 'Chat failed');
+      }
+
+      if (data?.lessonComplete) {
+        onLessonCompleted && onLessonCompleted({ chapterName, lessonName });
       }
 
       setMessages((prev) => prev.map((message) => (

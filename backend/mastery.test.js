@@ -212,3 +212,60 @@ test('exam completion and chat confusion both feed lesson mastery signals', asyn
   assert.ok(response.body.weakConcepts.some((concept) => concept.lessonName === 'তড়িৎ ক্ষেত্র'));
   assert.equal(response.body.recommendedExam.chapterName, 'Static Electricity');
 });
+
+test('completed lesson chat marks the lesson complete in mastery summary', async (t) => {
+  const mongoServer = await connectMemoryDb([
+    { chapterName: 'Static Electricity', lessons: ['তড়িৎ বিভব', 'সমবিভব তল'] },
+  ]);
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await disconnectMemoryDb(mongoServer);
+  });
+
+  global.fetch = async () => new Response(JSON.stringify({
+    response: 'পাঠ শেষ হয়েছে।',
+    textbook_answer: 'পাঠ শেষ হয়েছে।',
+    extra_explanation: '',
+    citations: [],
+    images: [],
+    lesson_complete: true,
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const app = createApp({
+    rateLimit: {
+      enabled: false,
+      redisClient: null,
+    },
+  });
+  const token = createToken('507f1f77bcf86cd799439014');
+
+  const chatResponse = await request(app)
+    .post('/api/chat')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      message: 'বুঝেছি',
+      chapterName: 'Static Electricity',
+      lessonName: 'তড়িৎ বিভব',
+    })
+    .expect(200);
+
+  assert.equal(chatResponse.body.lessonComplete, true);
+
+  const response = await request(app)
+    .get('/api/mastery/summary')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200);
+
+  const chapter = response.body.chapterProgress.find((item) => item.chapterName === 'Static Electricity');
+  const lesson = chapter.lessons.find((item) => item.lessonName === 'তড়িৎ বিভব');
+
+  assert.equal(response.body.completedLessons, 1);
+  assert.equal(response.body.overallProgress, 50);
+  assert.equal(chapter.masteryScore, 50);
+  assert.equal(lesson.masteryScore, 100);
+  assert.equal(lesson.status, 'Completed');
+  assert.ok(lesson.lessonCompletedAt);
+});

@@ -55,6 +55,12 @@ class LessonGroundingTests(unittest.TestCase):
         self.assertEqual(len(result["chunks"]), 2)
         self.assertEqual(result["chunks"][0]["section_label"], "Page 1 / Coulomb's Law")
 
+    def test_chunking_does_not_surface_chunk_as_heading(self):
+        chunks = chunk_lesson_content("তড়িৎ বিভব হলো একক আধানপ্রতি কাজ।")
+
+        self.assertEqual(chunks[0]["section_label"], "ধারণা 1")
+        self.assertNotIn("Chunk", chunks[0]["section_label"])
+
     def test_cross_lesson_retrieval_picks_the_best_matching_lesson(self):
         catalog = [
             {

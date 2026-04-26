@@ -276,6 +276,27 @@ POSITIVE_UNDERSTANDING_PHRASES = {
     "bivob",
     "potential",
 }
+LESSON_START_PHRASES = {
+    "start",
+    "begin",
+    "continue",
+    "teach",
+    "learn",
+    "lesson",
+    "from beginning",
+    "from scratch",
+    "start learning",
+    "শুরু",
+    "শুরু করি",
+    "শুরু করো",
+    "শিখতে চাই",
+    "শেখাও",
+    "পড়াও",
+    "পড়াও",
+    "বুঝাও",
+    "বুঝিয়ে দাও",
+    "বুঝিয়ে দাও",
+}
 NEGATIVE_UNDERSTANDING_PHRASES = {
     "no",
     "not clear",
@@ -420,6 +441,15 @@ def is_practice_request(value):
 
 def normalize_grounded_text(value):
     text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = (
+        text.replace("\\\\(", "$")
+        .replace("\\\\)", "$")
+        .replace("\\(", "$")
+        .replace("\\)", "$")
+        .replace("\\\\,", " ")
+        .replace("\\,", " ")
+        .replace("へ", " দিকে")
+    )
     text = LITERAL_NEWLINE_PATTERN.sub("\n", text)
     text = LITERAL_TAB_PATTERN.sub(" ", text)
     text = LITERAL_ESCAPED_ANSWER_MARKER_PATTERN.sub("\n", text)
@@ -452,6 +482,27 @@ def fix_potential_direction_text(value):
     ]
     for wrong, right in fixes:
         text = re.sub(re.escape(wrong), right, text, flags=re.IGNORECASE)
+
+    contradiction_patterns = [
+        (
+            r"বেশি আধানযুক্ত\s*\(কিন্তু কম বিভবযুক্ত\)\s*বস্তু থেকে কম আধানযুক্ত\s*\(কিন্তু বেশি বিভবযুক্ত\)\s*বস্তুতে আধান প্রবাহিত হয়",
+            "আধানের পরিমাণ নয়, বিভবের পার্থক্যই প্রবাহের দিক ঠিক করে; ধনাত্মক আধান উচ্চ বিভব থেকে নিম্ন বিভবের দিকে প্রবাহিত হয়",
+        ),
+        (
+            r"আধান কেবল এক বস্তু থেকে অন্য বস্তুর দিকে স্থানান্তরিত হতে পারে। এই ধারণা তড়িৎ বিভবের সঙ্গে ঘনিষ্ঠভাবে যুক্ত, কারণ বিভব হল আধানের ‘শক্তি স্তর’ যা আধানের প্রবাহকে চালিত করে।",
+            "আধান এক বস্তু থেকে অন্য বস্তুর দিকে স্থানান্তরিত হতে পারে। এই ধারণা তড়িৎ বিভবের সঙ্গে যুক্ত, কারণ বিভবের পার্থক্যই আধান প্রবাহের চালিকা শক্তি।",
+        ),
+        (
+            r"তাই উচ্চ বিভবের দিকে আধানের প্রবাহ হবে",
+            "তাই ধনাত্মক আধান উচ্চ বিভব থেকে নিম্ন বিভবের দিকে প্রবাহিত হবে",
+        ),
+        (
+            r"charge flows toward higher potential",
+            "positive charge flows from higher potential to lower potential",
+        ),
+    ]
+    for pattern, replacement in contradiction_patterns:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     return text
 
 
@@ -575,6 +626,33 @@ def strip_topic_numbering(value):
     text = collapse_inline_whitespace(value)
     stripped = TOPIC_NUMBER_PREFIX_PATTERN.sub("", text).strip()
     return stripped or text
+
+
+def derive_topic_title_from_text(value, fallback_index):
+    text = normalize_grounded_text(value)
+    text = re.sub(r"^#+\s*", "", text).strip()
+    lines = [collapse_inline_whitespace(line) for line in text.splitlines() if collapse_inline_whitespace(line)]
+    candidates = []
+    if lines:
+        candidates.append(lines[0])
+
+    fragments = re.split(r"(?<=[।.!?])\s+", collapse_inline_whitespace(text))
+    candidates.extend(fragment for fragment in fragments if fragment)
+
+    for candidate in candidates:
+        cleaned = strip_topic_numbering(strip_diagram_serial_numbers(candidate))
+        cleaned = re.sub(r"[*_`]+", "", cleaned).strip(" -:।.")
+        if not cleaned:
+            continue
+        words = cleaned.split()
+        if len(words) > 8:
+            cleaned = " ".join(words[:8]).strip(" -:।.")
+        if len(cleaned) > 80:
+            cleaned = cleaned[:77].rstrip(" ,;:-।.") + "..."
+        if cleaned and not is_generic_chunk_label(cleaned):
+            return cleaned
+
+    return f"ধারণা {fallback_index}"
 
 
 def repair_invalid_json_backslashes(value):
@@ -895,11 +973,17 @@ def build_lesson_concepts(lesson_catalog, lesson_name, lesson_source=None):
         chunk_text = str(chunk.get("chunk_text") or "").strip()
         if not chunk_text:
             continue
+        raw_label = strip_topic_numbering(chunk.get("section_label") or "")
+        section_label = (
+            derive_topic_title_from_text(chunk_text, index)
+            if not raw_label or is_generic_chunk_label(raw_label)
+            else raw_label
+        )
         concepts.append(
             {
                 "concept_index": len(concepts),
                 "display_index": index,
-                "section_label": strip_topic_numbering(chunk.get("section_label") or f"Concept {index}"),
+                "section_label": section_label,
                 "chunk_text": chunk_text,
             }
         )
@@ -1144,6 +1228,33 @@ def is_student_question_in_lesson_flow(user_text):
           "graph",
       }
     if tokens & question_tokens:
+        return True
+
+    return False
+
+
+def is_lesson_start_request(user_text):
+    text = str(user_text or "").strip()
+    if not text:
+        return True
+
+    if is_introductory_question(text):
+        return True
+
+    normalized = normalize_text(text)
+    joined = normalize_joined_text(text)
+    if normalized in LESSON_START_PHRASES:
+        return True
+
+    if any(phrase in normalized for phrase in LESSON_START_PHRASES if " " in phrase):
+        return True
+
+    tokens = tokenize(text)
+    if tokens & LESSON_START_PHRASES:
+        return True
+
+    bangla_starts = ("শুরু", "শিখ", "শেখ", "পড়া", "পড়া", "পড়াও", "পড়াও", "বুঝ")
+    if any(marker in joined for marker in bangla_starts):
         return True
 
     return False
@@ -1742,8 +1853,25 @@ def select_images_for_concept(
     return [image]
 
 
-def build_lesson_completion_payload(used_image_ids=None):
-    response_text = "DONE"
+def build_lesson_completion_payload(concepts=None, used_image_ids=None):
+    topic_labels = []
+    for concept in concepts or []:
+        label = strip_topic_numbering(concept.get("section_label") or "")
+        if label and not is_generic_chunk_label(label):
+            topic_labels.append(label)
+        if len(topic_labels) >= 5:
+            break
+
+    if topic_labels:
+        covered_text = "এই পাঠে আমরা কভার করেছি: " + ", ".join(topic_labels) + "।"
+    else:
+        covered_text = "এই পাঠের মূল অংশগুলো কভার করা হয়েছে।"
+
+    response_text = (
+        "পাঠ শেষ হয়েছে।\n\n"
+        f"{covered_text}\n\n"
+        "এখন তুমি চাইলে এই পাঠ থেকে ছোট অনুশীলন, সংক্ষিপ্ত রিভিশন, বা সন্দেহের প্রশ্ন করতে পারো।"
+    )
     return {
         "response": response_text,
         "images": [],
@@ -2020,7 +2148,7 @@ def run_lesson_flow_chat(
         if understood:
             next_index = concept_index + 1
             if next_index >= len(concepts):
-                return build_lesson_completion_payload(flow_state["used_image_ids"])
+                return build_lesson_completion_payload(concepts=concepts, used_image_ids=flow_state["used_image_ids"])
             next_payload = teach_lesson_concept(
                 llm=llm,
                 chapter_name=chapter_name,
@@ -2145,10 +2273,11 @@ def run_chat(
         lesson_source = None
 
     flow_state = normalize_lesson_flow_state(saved_thread_state)
+    start_request = is_lesson_start_request(user_text)
     use_lesson_flow = (flow_state["mode"] == "lesson_flow" and not flow_state["lesson_complete"]) or (
-        flow_state["lesson_complete"] and is_introductory_question(user_text)
+        flow_state["lesson_complete"] and start_request
     ) or (
-        flow_state["mode"] != "lesson_flow" and is_introductory_question(user_text)
+        flow_state["mode"] != "lesson_flow" and start_request
     )
 
     if use_lesson_flow:

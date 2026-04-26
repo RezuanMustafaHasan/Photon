@@ -5,6 +5,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const mongoose = require('mongoose');
 const multer = require('multer');
+const jwt = require('jsonwebtoken');
 const { v2: cloudinary } = require('cloudinary');
 
 dotenv.config();
@@ -19,6 +20,8 @@ const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
 const CLOUDINARY_FOLDER = process.env.CLOUDINARY_FOLDER || 'photon/lesson-images';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'admin_dev_secret_change_me';
+const ADMIN_JWT_EXPIRES_IN = process.env.ADMIN_JWT_EXPIRES_IN || '8h';
 
 const jsonUpload = multer({
   storage: multer.memoryStorage(),
@@ -125,6 +128,122 @@ const normalizeFileName = (input) => {
 };
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+const normalizeRole = (value) => String(value || '').trim().toLowerCase();
+
+const parseAdminAccounts = () => {
+  const fallbackEmail = String(process.env.ADMIN_EMAIL || 'admin@example.com').trim().toLowerCase();
+  const fallbackPassword = String(process.env.ADMIN_PASSWORD || 'admin12345');
+  const fallbackName = String(process.env.ADMIN_NAME || 'Admin Demo').trim() || 'Admin Demo';
+  const fallbackRole = normalizeRole(process.env.ADMIN_ROLE || 'admin') || 'admin';
+
+  const fallback = [
+    {
+      email: fallbackEmail,
+      password: fallbackPassword,
+      name: fallbackName,
+      role: fallbackRole,
+    },
+  ];
+
+  const raw = String(process.env.ADMIN_ACCOUNTS_JSON || '').trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return fallback;
+    }
+
+    const accounts = parsed
+      .map((account) => ({
+        email: String(account?.email || '').trim().toLowerCase(),
+        password: String(account?.password || ''),
+        name: String(account?.name || '').trim() || 'Admin User',
+        role: normalizeRole(account?.role || 'admin') || 'admin',
+      }))
+      .filter((account) => account.email && account.password);
+
+    return accounts.length ? accounts : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const ADMIN_ACCOUNTS = parseAdminAccounts();
+
+const findAdminAccountByEmail = (email) => {
+  const targetEmail = String(email || '').trim().toLowerCase();
+  return ADMIN_ACCOUNTS.find((account) => account.email === targetEmail);
+};
+
+const toAdminSessionUser = (account) => ({
+  id: account.email,
+  name: account.name,
+  email: account.email,
+  role: normalizeRole(account.role) || 'admin',
+});
+
+const createAdminToken = (account) => {
+  return jwt.sign(
+    {
+      sub: account.email,
+      email: account.email,
+      name: account.name,
+      role: normalizeRole(account.role) || 'admin',
+    },
+    ADMIN_JWT_SECRET,
+    { expiresIn: ADMIN_JWT_EXPIRES_IN },
+  );
+};
+
+const authenticateAdmin = (req, res, next) => {
+  const header = String(req.headers.authorization || '');
+  const [type, token] = header.split(' ');
+
+  if (type !== 'Bearer' || !token) {
+    return res.status(401).json({ message: 'Unauthorized.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, ADMIN_JWT_SECRET);
+    req.adminUser = {
+      id: String(decoded.sub || decoded.email || '').trim(),
+      email: String(decoded.email || '').trim().toLowerCase(),
+      name: String(decoded.name || 'Admin User').trim() || 'Admin User',
+      role: normalizeRole(decoded.role) || 'admin',
+    };
+
+    if (!req.adminUser.id || !req.adminUser.email) {
+      return res.status(401).json({ message: 'Unauthorized.' });
+    }
+
+    return next();
+  } catch {
+    return res.status(401).json({ message: 'Unauthorized.' });
+  }
+};
+
+const authorizeRoles = (...roles) => {
+  const allowedRoles = roles.map(normalizeRole).filter(Boolean);
+
+  return (req, res, next) => {
+    if (!req.adminUser) {
+      return res.status(401).json({ message: 'Unauthorized.' });
+    }
+
+    if (!allowedRoles.length || allowedRoles.includes(normalizeRole(req.adminUser.role))) {
+      return next();
+    }
+
+    return res.status(403).json({ message: 'Forbidden.' });
+  };
+};
+
+const adminOnly = [authenticateAdmin, authorizeRoles('admin')];
+const adminOrEditor = [authenticateAdmin, authorizeRoles('admin', 'editor')];
 
 const parseTopics = (input) => {
   if (Array.isArray(input)) {
@@ -263,17 +382,65 @@ const deleteImageFromCloudinary = async (publicId) => {
   return cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
 };
 
-app.get('/api/admin/users', async (req, res) => {
+app.post('/api/admin/auth/login', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required.' });
+  }
+
+  const account = findAdminAccountByEmail(email);
+
+  if (!account || account.password !== password) {
+    return res.status(401).json({ message: 'Invalid email or password.' });
+  }
+
+  const user = toAdminSessionUser(account);
+  const token = createAdminToken(account);
+
+  return res.json({ token, user });
+});
+
+app.get('/api/admin/auth/me', authenticateAdmin, async (req, res) => {
+  return res.json({ user: req.adminUser });
+});
+
+app.get('/api/admin/users', ...adminOnly, async (req, res) => {
   try {
-    const data = await fs.readFile(USERS_FILE, 'utf8');
-    const users = JSON.parse(data);
+    const db = await getDb();
+    const registeredUsers = await db
+      .collection('users')
+      .find(
+        {},
+        {
+          projection: {
+            name: 1,
+            email: 1,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+      )
+      .sort({ createdAt: -1, _id: -1 })
+      .toArray();
+
+    const users = registeredUsers.map((user) => ({
+      id: String(user._id || ''),
+      name: String(user.name || ''),
+      email: String(user.email || ''),
+      role: 'student',
+      createdAt: user.createdAt || null,
+      updatedAt: user.updatedAt || null,
+    }));
+
     res.json({ users });
   } catch (error) {
     res.status(500).json({ message: 'Failed to load users' });
   }
 });
 
-app.get('/api/admin/contents/directories', async (req, res) => {
+app.get('/api/admin/contents/directories', ...adminOrEditor, async (req, res) => {
   try {
     res.json({ directories: [] });
   } catch (error) {
@@ -281,7 +448,7 @@ app.get('/api/admin/contents/directories', async (req, res) => {
   }
 });
 
-app.get('/api/admin/contents/list', async (req, res) => {
+app.get('/api/admin/contents/list', ...adminOrEditor, async (req, res) => {
   try {
     const items = await loadMainItems();
     const files = items.map((item) => item.name).filter(Boolean).sort();
@@ -291,7 +458,7 @@ app.get('/api/admin/contents/list', async (req, res) => {
   }
 });
 
-app.post('/api/admin/contents/directory', async (req, res) => {
+app.post('/api/admin/contents/directory', ...adminOrEditor, async (req, res) => {
   try {
     await ensureMainDoc();
     res.json({ message: 'Collection ready' });
@@ -300,7 +467,7 @@ app.post('/api/admin/contents/directory', async (req, res) => {
   }
 });
 
-app.post('/api/admin/contents/upload', jsonUpload.single('file'), async (req, res) => {
+app.post('/api/admin/contents/upload', ...adminOrEditor, jsonUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file provided' });
@@ -327,7 +494,7 @@ app.post('/api/admin/contents/upload', jsonUpload.single('file'), async (req, re
   }
 });
 
-app.get('/api/admin/images/chapters', async (req, res) => {
+app.get('/api/admin/images/chapters', ...adminOrEditor, async (req, res) => {
   try {
     const items = await loadMainItems();
     const chapters = items
@@ -344,7 +511,7 @@ app.get('/api/admin/images/chapters', async (req, res) => {
   }
 });
 
-app.get('/api/admin/images/lessons', async (req, res) => {
+app.get('/api/admin/images/lessons', ...adminOrEditor, async (req, res) => {
   try {
     const chapterId = req.query.chapterId;
     if (!chapterId) {
@@ -368,7 +535,7 @@ app.get('/api/admin/images/lessons', async (req, res) => {
   }
 });
 
-app.get('/api/admin/images/lesson', async (req, res) => {
+app.get('/api/admin/images/lesson', ...adminOrEditor, async (req, res) => {
   try {
     const chapterId = String(req.query.chapterId || '').trim();
     const lessonName = String(req.query.lessonName || '').trim();
@@ -397,7 +564,7 @@ app.get('/api/admin/images/lesson', async (req, res) => {
   }
 });
 
-app.post('/api/admin/images/upload', imageUpload.single('image'), async (req, res) => {
+app.post('/api/admin/images/upload', ...adminOrEditor, imageUpload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'Image file is required' });
@@ -460,7 +627,7 @@ app.post('/api/admin/images/upload', imageUpload.single('image'), async (req, re
   }
 });
 
-app.put('/api/admin/images/item', imageUpload.single('image'), async (req, res) => {
+app.put('/api/admin/images/item', ...adminOrEditor, imageUpload.single('image'), async (req, res) => {
   let replacementPublicId = '';
 
   try {
@@ -543,7 +710,7 @@ app.put('/api/admin/images/item', imageUpload.single('image'), async (req, res) 
   }
 });
 
-app.delete('/api/admin/images/item', async (req, res) => {
+app.delete('/api/admin/images/item', ...adminOrEditor, async (req, res) => {
   try {
     const chapterId = String(req.query.chapterId || req.body?.chapterId || '').trim();
     const lessonName = String(req.query.lessonName || req.body?.lessonName || '').trim();
@@ -590,7 +757,7 @@ app.delete('/api/admin/images/item', async (req, res) => {
   }
 });
 
-app.get('/api/admin/contents/file', async (req, res) => {
+app.get('/api/admin/contents/file', ...adminOrEditor, async (req, res) => {
   try {
     const fileName = normalizeFileName(req.query.path || '');
     const items = await loadMainItems();
@@ -604,7 +771,7 @@ app.get('/api/admin/contents/file', async (req, res) => {
   }
 });
 
-app.put('/api/admin/contents/file', async (req, res) => {
+app.put('/api/admin/contents/file', ...adminOrEditor, async (req, res) => {
   try {
     const fileName = normalizeFileName(req.body.path || '');
     const content = req.body.content;

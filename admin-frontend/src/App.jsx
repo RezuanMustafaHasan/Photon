@@ -1,21 +1,191 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom';
 import './App.css';
 
 const API_BASE = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:5050';
+const ADMIN_TOKEN_KEY = 'photon_admin_token';
+const ADMIN_USER_KEY = 'photon_admin_user';
+
+const AdminAuthContext = createContext(null);
+
+const parseStoredUser = (rawUser) => {
+  if (!rawUser) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawUser);
+  } catch {
+    return null;
+  }
+};
+
+const readStoredSession = () => {
+  const localToken = localStorage.getItem(ADMIN_TOKEN_KEY);
+  const sessionToken = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  const token = localToken || sessionToken || null;
+  const userRaw = localToken
+    ? localStorage.getItem(ADMIN_USER_KEY)
+    : sessionStorage.getItem(ADMIN_USER_KEY);
+
+  return {
+    token,
+    user: parseStoredUser(userRaw),
+    remember: Boolean(localToken),
+  };
+};
+
+const normalizeUserRole = (role) => String(role || '').trim().toLowerCase();
+
+const getDefaultAdminPath = (user) => {
+  return normalizeUserRole(user?.role) === 'admin' ? '/admin/users' : '/admin/contents';
+};
+
+const AdminAuthProvider = ({ children }) => {
+  const initial = readStoredSession();
+  const [token, setToken] = useState(initial.token);
+  const [user, setUser] = useState(initial.user);
+  const [isHydrating, setIsHydrating] = useState(Boolean(initial.token));
+
+  const clearStoredSession = useCallback(() => {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_USER_KEY);
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    sessionStorage.removeItem(ADMIN_USER_KEY);
+  }, []);
+
+  const persistSession = useCallback((nextToken, nextUser, remember) => {
+    clearStoredSession();
+    const storage = remember ? localStorage : sessionStorage;
+    storage.setItem(ADMIN_TOKEN_KEY, nextToken);
+    storage.setItem(ADMIN_USER_KEY, JSON.stringify(nextUser));
+  }, [clearStoredSession]);
+
+  const logout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    setIsHydrating(false);
+    clearStoredSession();
+  }, [clearStoredSession]);
+
+  const login = useCallback(async ({ email, password, remember }) => {
+    const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Login failed');
+    }
+
+    setToken(data.token || null);
+    setUser(data.user || null);
+    setIsHydrating(false);
+    persistSession(data.token, data.user, remember);
+
+    return data.user;
+  }, [persistSession]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const hydrateSession = async () => {
+      if (!token) {
+        setIsHydrating(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/admin/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!mounted) {
+          return;
+        }
+
+        if (!response.ok) {
+          logout();
+          return;
+        }
+
+        setUser(data.user || null);
+      } catch {
+        if (mounted) {
+          logout();
+        }
+      } finally {
+        if (mounted) {
+          setIsHydrating(false);
+        }
+      }
+    };
+
+    hydrateSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, [token, logout]);
+
+  const value = useMemo(
+    () => ({
+      token,
+      user,
+      isHydrating,
+      isAuthenticated: Boolean(token),
+      login,
+      logout,
+    }),
+    [token, user, isHydrating, login, logout],
+  );
+
+  return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
+};
+
+const useAdminAuth = () => {
+  const context = useContext(AdminAuthContext);
+  if (!context) {
+    throw new Error('useAdminAuth must be used within AdminAuthProvider');
+  }
+  return context;
+};
 
 const useAdminApi = () => {
+  const { token, logout } = useAdminAuth();
+
   const request = useCallback(async (path, options = {}) => {
+    const headers = new Headers(options.headers || {});
+
+    if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
     const response = await fetch(`${API_BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
       ...options,
+      headers,
     });
+
     const data = await response.json().catch(() => ({}));
+
     if (!response.ok) {
+      if (response.status === 401) {
+        logout();
+      }
       throw new Error(data.message || 'Request failed');
     }
+
     return data;
-  }, []);
+  }, [token, logout]);
+
   return { request };
 };
 
@@ -59,9 +229,18 @@ const addTopicToList = (topicInput, currentTopics, setTopics, setTopicInput) => 
 const PageShell = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAdminAuth();
+  const role = normalizeUserRole(user?.role);
+  const canViewUsers = role === 'admin';
+  const canManageContent = role === 'admin' || role === 'editor';
   const isUsers = location.pathname.includes('/admin/users');
   const isContents = location.pathname.includes('/admin/contents');
   const isImages = location.pathname.includes('/admin/images');
+
+  const handleLogout = () => {
+    logout();
+    navigate('/admin/login', { replace: true });
+  };
 
   return (
     <div className="app-shell">
@@ -70,11 +249,26 @@ const PageShell = ({ children }) => {
           <div className="app-title">Photon Admin</div>
           <div className="app-subtitle">Manage users, content, and lesson images</div>
         </div>
-        <nav className="nav-links">
-          <button className={isUsers ? 'active' : ''} onClick={() => navigate('/admin/users')}>Users</button>
-          <button className={isContents ? 'active' : ''} onClick={() => navigate('/admin/contents')}>Contents</button>
-          <button className={isImages ? 'active' : ''} onClick={() => navigate('/admin/images')}>Lesson Images</button>
-        </nav>
+        <div className="app-header-actions">
+          <nav className="nav-links">
+            {canViewUsers && (
+              <button className={isUsers ? 'active' : ''} onClick={() => navigate('/admin/users')}>Users</button>
+            )}
+            {canManageContent && (
+              <button className={isContents ? 'active' : ''} onClick={() => navigate('/admin/contents')}>Contents</button>
+            )}
+            {canManageContent && (
+              <button className={isImages ? 'active' : ''} onClick={() => navigate('/admin/images')}>Lesson Images</button>
+            )}
+          </nav>
+          <div className="admin-user-controls">
+            <div className="user-pill">
+              <span className="user-pill-name">{user?.name || 'Admin User'}</span>
+              <span className="user-pill-role">{user?.role || 'admin'}</span>
+            </div>
+            <button type="button" className="secondary" onClick={handleLogout}>Sign Out</button>
+          </div>
+        </div>
       </header>
       <main className="app-main">{children}</main>
     </div>
@@ -151,9 +345,7 @@ const ContentsPage = () => {
     setStatus('loading');
     setError('');
     try {
-      const data = await request('/api/admin/contents/list', {
-        headers: {},
-      });
+      const data = await request('/api/admin/contents/list');
       setFiles(data.files || []);
       setSelectedFile('');
       setFileContent('');
@@ -175,14 +367,10 @@ const ContentsPage = () => {
     try {
       const formData = new FormData();
       formData.append('file', uploadFile);
-      const response = await fetch(`${API_BASE}/api/admin/contents/upload`, {
+      await request('/api/admin/contents/upload', {
         method: 'POST',
         body: formData,
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.message || 'Upload failed');
-      }
       setUploadFile(null);
       await loadItems();
     } catch (err) {
@@ -459,14 +647,10 @@ const ImagesPage = () => {
       formData.append('description', description.trim());
       formData.append('topics', JSON.stringify(topics));
 
-      const response = await fetch(`${API_BASE}/api/admin/images/upload`, {
+      const data = await request('/api/admin/images/upload', {
         method: 'POST',
         body: formData,
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.message || 'Image upload failed');
-      }
 
       const images = await loadLessonImages(selectedChapterId, selectedLesson);
       setSuccess(data.message || 'Image uploaded and lesson updated');
@@ -512,15 +696,10 @@ const ImagesPage = () => {
       formData.append('description', editDescription.trim());
       formData.append('topics', JSON.stringify(editTopics));
 
-      const response = await fetch(`${API_BASE}/api/admin/images/item`, {
+      const data = await request('/api/admin/images/item', {
         method: 'PUT',
         body: formData,
       });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.message || 'Image update failed');
-      }
 
       await loadLessonImages(selectedChapterId, selectedLesson, selectedImageIndex);
       setSuccess(data.message || 'Image updated');
@@ -549,15 +728,10 @@ const ImagesPage = () => {
     setSuccess('');
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/admin/images/item?chapterId=${encodeURIComponent(selectedChapterId)}&lessonName=${encodeURIComponent(selectedLesson)}&imageIndex=${encodeURIComponent(String(imageIndex))}`,
+      const data = await request(
+        `/api/admin/images/item?chapterId=${encodeURIComponent(selectedChapterId)}&lessonName=${encodeURIComponent(selectedLesson)}&imageIndex=${encodeURIComponent(String(imageIndex))}`,
         { method: 'DELETE' },
       );
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.message || 'Image delete failed');
-      }
 
       const images = await loadLessonImages(selectedChapterId, selectedLesson);
       const fallbackImage = images[Math.min(imageIndex, Math.max(images.length - 1, 0))] || null;
@@ -830,38 +1004,182 @@ const ImagesPage = () => {
   );
 };
 
+const RequireAuth = ({ children, roles = [] }) => {
+  const location = useLocation();
+  const { isHydrating, isAuthenticated, user } = useAdminAuth();
+
+  if (isHydrating) {
+    return (
+      <div className="auth-screen">
+        <section className="auth-card">
+          <h2>Loading Admin Session</h2>
+          <p className="muted">Checking your credentials...</p>
+        </section>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  }
+
+  const allowedRoles = roles.map(normalizeUserRole);
+  if (allowedRoles.length && !allowedRoles.includes(normalizeUserRole(user?.role))) {
+    return <Navigate to={getDefaultAdminPath(user)} replace />;
+  }
+
+  return children;
+};
+
+const LoginPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated, isHydrating, user } = useAdminAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isHydrating && isAuthenticated) {
+      navigate(getDefaultAdminPath(user), { replace: true });
+    }
+  }, [isAuthenticated, isHydrating, navigate, user]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setStatus('submitting');
+    setError('');
+
+    try {
+      const loggedInUser = await login({ email, password, remember });
+      const fromPath = typeof location.state?.from === 'string' ? location.state.from : '';
+      const hasAdminPrefix = fromPath === '/admin' || fromPath.startsWith('/admin/');
+
+      let nextPath = hasAdminPrefix ? fromPath : getDefaultAdminPath(loggedInUser);
+      if (normalizeUserRole(loggedInUser?.role) !== 'admin' && nextPath === '/admin/users') {
+        nextPath = getDefaultAdminPath(loggedInUser);
+      }
+
+      navigate(nextPath, { replace: true });
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
+    }
+  };
+
+  if (isHydrating) {
+    return (
+      <div className="auth-screen">
+        <section className="auth-card">
+          <h2>Loading Admin Session</h2>
+          <p className="muted">Please wait...</p>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="auth-screen">
+      <section className="auth-card">
+        <h1>Photon Admin</h1>
+        <p className="muted">Sign in to access the admin panel.</p>
+        {error && <p className="error">{error}</p>}
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label htmlFor="admin-email">Email</label>
+          <input
+            id="admin-email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+
+          <label htmlFor="admin-password">Password</label>
+          <input
+            id="admin-password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+
+          <label className="remember-row" htmlFor="remember-admin-session">
+            <input
+              id="remember-admin-session"
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+            />
+            <span>Keep me signed in</span>
+          </label>
+
+          <button className="primary" type="submit" disabled={status === 'submitting'}>
+            {status === 'submitting' ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+      </section>
+    </div>
+  );
+};
+
+const AdminHomeRedirect = () => {
+  const { user } = useAdminAuth();
+  return <Navigate to={getDefaultAdminPath(user)} replace />;
+};
+
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
-        <Route
-          path="/admin/users"
-          element={
-            <PageShell>
-              <UsersPage />
-            </PageShell>
-          }
-        />
-        <Route
-          path="/admin/contents"
-          element={
-            <PageShell>
-              <ContentsPage />
-            </PageShell>
-          }
-        />
-        <Route
-          path="/admin/images"
-          element={
-            <PageShell>
-              <ImagesPage />
-            </PageShell>
-          }
-        />
-        <Route path="*" element={<Navigate to="/admin/users" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AdminAuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/admin/login" element={<LoginPage />} />
+          <Route
+            path="/admin"
+            element={
+              <RequireAuth>
+                <AdminHomeRedirect />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <RequireAuth roles={['admin']}>
+                <PageShell>
+                  <UsersPage />
+                </PageShell>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/contents"
+            element={
+              <RequireAuth roles={['admin', 'editor']}>
+                <PageShell>
+                  <ContentsPage />
+                </PageShell>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/images"
+            element={
+              <RequireAuth roles={['admin', 'editor']}>
+                <PageShell>
+                  <ImagesPage />
+                </PageShell>
+              </RequireAuth>
+            }
+          />
+          <Route path="*" element={<Navigate to="/admin" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AdminAuthProvider>
   );
 }
 

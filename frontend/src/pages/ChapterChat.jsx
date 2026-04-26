@@ -59,6 +59,7 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
     return normalizeChatModel(window.localStorage.getItem('photon_chat_model'));
   });
   const [messagesByLesson, setMessagesByLesson] = useState({});
+  const [completedLessons, setCompletedLessons] = useState(() => new Set());
   const [rateLimitNotice, setRateLimitNotice] = useState(null);
   const lessonActivityRef = useRef({
     chapterName: '',
@@ -84,6 +85,22 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
     const nextLesson = lesson || '';
     setSelectedLesson(nextLesson);
   };
+
+  const handleLessonCompleted = useCallback(({ lessonName }) => {
+    const completedLesson = typeof lessonName === 'string' ? lessonName.trim() : '';
+    if (!completedLesson) {
+      return;
+    }
+
+    setCompletedLessons((prev) => {
+      if (prev.has(completedLesson)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(completedLesson);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -454,6 +471,7 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
           <LessonSidebar
             chapterTitle={chapterTitle}
             selectedLesson={selectedLesson}
+            completedLessonNames={completedLessons}
             onSelectLesson={handleSelectLesson}
           />
         </div>
@@ -479,6 +497,7 @@ const ChapterChat = ({ chapterTitle, onBack }) => {
              rateLimitNotice={rateLimitNotice}
              setRateLimitNotice={setRateLimitNotice}
              onSourceClick={handleSourceClick}
+             onLessonCompleted={handleLessonCompleted}
            />
         </div>
       </main>

@@ -40,6 +40,7 @@ from graph.simple_graph import (
     compose_chat_markdown,
     extract_figure_hints,
     find_best_lesson_image,
+    is_lesson_start_request,
     is_student_question_in_lesson_flow,
     normalize_grounded_text,
     parse_grounded_response,
@@ -605,6 +606,44 @@ class SimpleGraphTests(unittest.TestCase):
         self.assertEqual(result["thread_state"]["current_step_index"], 0)
         self.assertFalse(result["thread_state"]["lesson_complete"])
 
+    def test_lesson_start_request_accepts_beginner_phrasing(self):
+        self.assertTrue(is_lesson_start_request("স্যার আমি একদম শুরু থেকে তড়িৎ বিভব শিখতে চাই। খুব সহজভাবে শুরু করি।"))
+        self.assertTrue(is_lesson_start_request("teach me this lesson from beginning"))
+
+    def test_normalize_grounded_text_repairs_potential_direction_contradiction(self):
+        output = normalize_grounded_text(
+            "এই আধানই পরে পরিবাহীর তড়িৎ বিভব নির্ধারণ করে; বেশি আধানযুক্ত (কিন্তু কম বিভবযুক্ত) বস্তু থেকে কম আধানযুক্ত (কিন্তু বেশি বিভবযুক্ত) বস্তুতে আধান প্রবাহিত হয় যতক্ষণ না দুটির বিভব সমান হয়।"
+        )
+
+        self.assertIn("বিভবের পার্থক্যই প্রবাহের দিক ঠিক করে", output)
+        self.assertNotIn("কম বিভবযুক্ত) বস্তু থেকে কম আধানযুক্ত", output)
+
+        output = normalize_grounded_text("তাই উচ্চ বিভবের দিকে আধানের প্রবাহ হবে, তা আধানের মোট পরিমাণের চেয়ে বিভবের পার্থক্যের ওপর নির্ভর করে।")
+
+        self.assertIn("ধনাত্মক আধান উচ্চ বিভব থেকে নিম্ন বিভবের দিকে", output)
+        self.assertNotIn("উচ্চ বিভবের দিকে আধানের প্রবাহ", output)
+
+    def test_normalize_grounded_text_repairs_literal_math_delimiters(self):
+        output = normalize_grounded_text("কাজ \\\\(q=1.6\\\\times10^{-19}\\\\,C\\\\) এবং A থেকে Bへ যায়।")
+
+        self.assertIn("$q=1.6", output)
+        self.assertIn("C$", output)
+        self.assertIn("B দিকে", output)
+        self.assertNotIn("\\\\(", output)
+        self.assertNotIn("へ", output)
+
+    def test_build_lesson_concepts_replaces_generic_chunk_labels(self):
+        lesson = {
+            "lesson_name": "তড়িৎ বিভব",
+            "content": "তড়িৎ বিভব হলো একক ধনাত্মক আধানকে কোনো বিন্দুতে আনতে একক আধানপ্রতি কাজ।\n\nবিভব পার্থক্য থাকলে আধান প্রবাহিত হয়।",
+        }
+
+        concepts = build_lesson_concepts([lesson], "তড়িৎ বিভব", lesson_source=lesson)
+
+        self.assertTrue(concepts)
+        self.assertNotIn("Chunk", concepts[0]["section_label"])
+        self.assertIn("তড়িৎ বিভব", concepts[0]["section_label"])
+
     @patch("graph.simple_graph.load_images_from_database", return_value=[])
     @patch("graph.simple_graph.get_llm")
     def test_run_chat_advances_to_next_concept_after_positive_reply(self, mock_get_llm, _mock_load_images):
@@ -783,8 +822,9 @@ class SimpleGraphTests(unittest.TestCase):
             saved_thread_state=done["thread_state"],
         )
 
-        self.assertEqual(done["response"], "DONE")
-        self.assertEqual(done["textbook_answer"], "DONE")
+        self.assertIn("পাঠ শেষ হয়েছে", done["response"])
+        self.assertIn("মূল ধারণা", done["response"])
+        self.assertIn("পাঠ শেষ হয়েছে", done["textbook_answer"])
         self.assertTrue(done["thread_state"]["lesson_complete"])
         self.assertFalse(done["thread_state"]["awaiting_understanding"])
         self.assertIn("সরল হার্মোনিক", follow_up["response"])

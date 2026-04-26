@@ -142,7 +142,7 @@ def build_chunk_label(page_label, heading_label, fallback_index):
         return heading_label
     if page_label:
         return page_label
-    return f"Chunk {fallback_index}"
+    return f"ধারণা {fallback_index}"
 
 
 def split_large_paragraph(paragraph, max_chars):

@@ -16,6 +16,7 @@ const userConceptMasterySchema = new mongoose.Schema(
     lastActivityAt: { type: Date, default: null },
     lastExamAt: { type: Date, default: null },
     lastLessonSeenAt: { type: Date, default: null },
+    lessonCompletedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

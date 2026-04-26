@@ -4,7 +4,12 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { createRateLimitNotice } from '../utils/rateLimit.js';
 import { fetchMasterySummary, findChapterProgress } from '../utils/mastery.js';
 
-const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
+const LessonSidebar = ({
+  chapterTitle,
+  selectedLesson,
+  completedLessonNames,
+  onSelectLesson,
+}) => {
   const { token, showRateLimitNotice } = useAuth();
   const [lessons, setLessons] = useState([]);
   const [status, setStatus] = useState('idle');
@@ -116,7 +121,27 @@ const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
     )
   ), [chapterMastery]);
 
-  const chapterProgressValue = Number(chapterMastery?.masteryScore) || 0;
+  const completedLessonSet = useMemo(() => {
+    if (completedLessonNames instanceof Set) {
+      return completedLessonNames;
+    }
+    return new Set(Array.isArray(completedLessonNames) ? completedLessonNames : []);
+  }, [completedLessonNames]);
+
+  const chapterProgressValue = useMemo(() => {
+    if (!lessons.length) {
+      return Number(chapterMastery?.masteryScore) || 0;
+    }
+
+    const total = lessons.reduce((sum, title) => {
+      if (completedLessonSet.has(title)) {
+        return sum + 100;
+      }
+      return sum + (Number(lessonProgressMap.get(title)?.masteryScore) || 0);
+    }, 0);
+
+    return Math.round(total / lessons.length);
+  }, [chapterMastery?.masteryScore, completedLessonSet, lessonProgressMap, lessons]);
 
   return (
     <div className="h-100 d-flex flex-column bg-white border-end border-gray-100">
@@ -136,11 +161,12 @@ const LessonSidebar = ({ chapterTitle, selectedLesson, onSelectLesson }) => {
         {status !== 'loading' && !lessons.length && !error && <div className="text-secondary px-2">No lessons yet</div>}
         {lessons.map((title, index) => {
           const masteryLesson = lessonProgressMap.get(title);
+          const isCompleted = completedLessonSet.has(title) || Number(masteryLesson?.masteryScore) >= 80;
           return (
             <LessonItem
               key={`${title}-${index}`}
               title={title}
-              isCompleted={Number(masteryLesson?.masteryScore) >= 80}
+              isCompleted={isCompleted}
               isActive={title === selectedLesson}
               onClick={() => {
                 if (chapterTitle) {
