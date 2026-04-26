@@ -41,12 +41,10 @@ const ProgressCard = ({ summary, status, error }) => {
   const overallProgress = Number(summary?.overallProgress) || 0;
   const practicedLessons = Number(summary?.practicedLessons) || 0;
   const completedLessons = Number(summary?.completedLessons) || 0;
-  const weakLessons = Number(summary?.weakLessons) || 0;
   const metrics = [
     { label: 'Syllabus mastery', value: `${overallProgress}%`, valueClassName: 'text-primary' },
     { label: 'Practiced lessons', value: practicedLessons, valueClassName: 'text-accent' },
     { label: 'Completed lessons', value: completedLessons, valueClassName: 'text-primary' },
-    { label: 'Weak lessons', value: weakLessons, valueClassName: 'text-primary' },
   ];
 
   return (
@@ -67,7 +65,7 @@ const ProgressCard = ({ summary, status, error }) => {
           {status !== 'loading' && status !== 'error' && (
             <div className="row g-3">
               {metrics.map((metric) => (
-                <div key={metric.label} className="col-12 col-sm-6 col-xl-3">
+                <div key={metric.label} className="col-12 col-sm-6 col-xl-4">
                   <div className="h-100 bg-gray-50 rounded-4 border border-gray-100 p-3">
                     <div className="small text-secondary mb-2">{metric.label}</div>
                     <div className={`fs-4 fw-bold ${metric.valueClassName}`}>{metric.value}</div>

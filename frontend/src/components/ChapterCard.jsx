@@ -8,13 +8,13 @@ const ChapterCard = ({ title, status, progress, locked, onClick }) => {
   return (
     <div 
       onClick={onClick}
-      className={`bg-white rounded-xl p-4 border border-gray-100 shadow-sm transition-all duration-300 hover-translate-y h-100 d-flex flex-column ${isLocked ? 'opacity-70 grayscale-50 cursor-not-allowed' : 'cursor-pointer'}`}
+      className={`chapter-card bg-white rounded-xl border border-gray-100 shadow-sm transition-all duration-300 hover-translate-y d-flex flex-column ${isLocked ? 'opacity-70 grayscale-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
-      <div className="mb-4">
-        <h4 className="fw-bold fs-5 text-primary font-bangla lh-sm mb-0">{title}</h4>
+      <div className="chapter-card__title">
+        <h4 className="fw-bold text-primary font-bangla lh-sm mb-0">{title}</h4>
       </div>
 
-      <div className="mt-auto vstack gap-3">
+      <div className="chapter-card__actions mt-auto vstack gap-3">
         {progress !== undefined && (
           <div>
             <div className="d-flex justify-content-between text-xs text-secondary mb-1">
@@ -36,7 +36,7 @@ const ChapterCard = ({ title, status, progress, locked, onClick }) => {
 
         <button 
           disabled={isLocked}
-          className={`w-100 py-2 rounded-3 text-xs fw-semibold border transition-colors ${
+          className={`chapter-card__button w-100 rounded-3 text-xs fw-semibold border transition-colors ${
             isCompleted 
               ? 'bg-gray-50 text-primary border-gray-200 hover:bg-gray-100'
               : isWeak
