@@ -1,9 +1,10 @@
 import json
+import hmac
 import os
 from functools import lru_cache
 from time import perf_counter
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from pymongo import MongoClient
 from bson import ObjectId
@@ -44,7 +45,6 @@ app = FastAPI()
 MONGODB_URI = os.getenv("MONGODB_URI")
 if not MONGODB_URI:
     raise RuntimeError("MONGODB_URI is not set in FastAPI/.env")
-print(f"Using MongoDB URI: {MONGODB_URI}")
 
 client = MongoClient(MONGODB_URI)
 db = client.get_default_database()
@@ -53,6 +53,23 @@ MAIN_DOC_ID = "main_book"
 QUESTION_COUNT_MIN = 1
 QUESTION_COUNT_MAX = 50
 CHAT_TIMING_LOGS_ENABLED = str(os.getenv("CHAT_TIMING_LOGS", "true")).strip().lower() not in {"0", "false", "no", "off"}
+FASTAPI_INTERNAL_API_KEY = str(os.getenv("FASTAPI_INTERNAL_API_KEY") or "").strip()
+IS_PRODUCTION = (
+    str(os.getenv("ENVIRONMENT") or "").strip().lower() == "production"
+    or bool(str(os.getenv("RENDER_SERVICE_TYPE") or "").strip())
+)
+
+if IS_PRODUCTION and len(FASTAPI_INTERNAL_API_KEY) < 32:
+    raise RuntimeError("FASTAPI_INTERNAL_API_KEY must be set to at least 32 characters in production")
+
+
+def verify_internal_api_key(x_internal_api_key: str | None = Header(default=None)):
+    if not FASTAPI_INTERNAL_API_KEY:
+        return
+
+    supplied_key = str(x_internal_api_key or "").strip()
+    if not hmac.compare_digest(supplied_key, FASTAPI_INTERNAL_API_KEY):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 class ChatRequest(BaseModel):
@@ -174,16 +191,13 @@ def root():
     return {"status": "ok"}
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(verify_internal_api_key)])
 async def chat(payload: ChatRequest):
     request_started = perf_counter()
     log_chat_timing(
         f"[chat] fastapi start user={payload.user_id} chapter={payload.chapter_name} lesson={payload.lesson_name} model={payload.chat_model or 'default'}"
     )
 
-    log_path = os.path.join(os.path.dirname(__file__), "incoming_requests.txt")
-    with open(log_path, "a", encoding="utf-8") as log_file:
-        log_file.write(f"Incoming request: {payload.json()}\n")
     if not payload.message or not payload.user_id or not payload.chapter_name or not payload.lesson_name:
         raise HTTPException(status_code=400, detail="message, user_id, chapter_name, lesson_name are required")
 
@@ -285,7 +299,7 @@ async def chat(payload: ChatRequest):
     )
 
 
-@app.get("/history", response_model=HistoryResponse)
+@app.get("/history", response_model=HistoryResponse, dependencies=[Depends(verify_internal_api_key)])
 async def history(user_id: str, chapter_name: str, lesson_name: str):
     if not user_id or not chapter_name or not lesson_name:
         raise HTTPException(status_code=400, detail="user_id, chapter_name, lesson_name are required")
@@ -293,7 +307,7 @@ async def history(user_id: str, chapter_name: str, lesson_name: str):
     return HistoryResponse(history=history_data)
 
 
-@app.delete("/chat/history", response_model=DeleteChatResponse)
+@app.delete("/chat/history", response_model=DeleteChatResponse, dependencies=[Depends(verify_internal_api_key)])
 async def delete_chat_history(payload: ChatThreadRequest):
     if not payload.user_id or not payload.chapter_name or not payload.lesson_name:
         raise HTTPException(status_code=400, detail="user_id, chapter_name, lesson_name are required")
@@ -304,7 +318,7 @@ async def delete_chat_history(payload: ChatThreadRequest):
     return DeleteChatResponse(deleted=True)
 
 
-@app.post("/exam/generate", response_model=ExamGenerateResponse)
+@app.post("/exam/generate", response_model=ExamGenerateResponse, dependencies=[Depends(verify_internal_api_key)])
 async def generate_exam_route(payload: ExamGenerateRequest):
     if payload.questionCount < QUESTION_COUNT_MIN or payload.questionCount > QUESTION_COUNT_MAX:
         raise HTTPException(
@@ -328,7 +342,7 @@ async def generate_exam_route(payload: ExamGenerateRequest):
     return ExamGenerateResponse(questions=[ExamQuestion(**question) for question in questions])
 
 
-@app.post("/exam/analyze", response_model=ExamAnalyzeResponse)
+@app.post("/exam/analyze", response_model=ExamAnalyzeResponse, dependencies=[Depends(verify_internal_api_key)])
 async def analyze_exam_route(payload: ExamAnalyzeRequest):
     if payload.questionCount < QUESTION_COUNT_MIN or payload.questionCount > QUESTION_COUNT_MAX:
         raise HTTPException(

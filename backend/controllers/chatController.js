@@ -1,10 +1,12 @@
 import mongoose from 'mongoose';
 import { recordChatConfusion, recordLessonCompletion } from '../util/mastery.js';
 import { refreshRevisionTasks } from '../util/revision.js';
+import { createJsonHeaders } from '../util/security.js';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 const FASTAPI_CHAT_URL = `${FASTAPI_BASE_URL}/chat`;
 const FASTAPI_CHAT_HISTORY_URL = `${FASTAPI_BASE_URL}/chat/history`;
+const DEFAULT_CHAT_MODEL = 'groq:openai/gpt-oss-120b';
 
 const logBestEffortError = (label, error) => {
   if (error?.name === 'MongoClientClosedError') {
@@ -28,6 +30,14 @@ const parseUserId = (value) => {
 };
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const sanitizeChatModel = (value) => {
+  const normalized = normalizeString(value);
+  if (/^groq:.+$/i.test(normalized)) {
+    return normalized;
+  }
+  return DEFAULT_CHAT_MODEL;
+};
 
 const normalizeCitation = (value) => {
   if (!value || typeof value !== 'object') {
@@ -127,7 +137,7 @@ export const chat = async (req, res) => {
   const chapterName = typeof req.body?.chapterName === 'string' ? req.body.chapterName.trim() : '';
   const lessonName = typeof req.body?.lessonName === 'string' ? req.body.lessonName.trim() : '';
   const historyMode = req.body?.historyMode === 'assistant_only' ? 'assistant_only' : 'default';
-  const chatModel = typeof req.body?.chatModel === 'string' ? req.body.chatModel.trim() : '';
+  const chatModel = sanitizeChatModel(req.body?.chatModel);
   const requestStartedAt = Date.now();
 
   console.log(`[chat] backend start user=${userId} chapter=${chapterName} lesson=${lessonName}`);
@@ -157,7 +167,7 @@ export const chat = async (req, res) => {
 
     const upstream = await fetch(FASTAPI_CHAT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: createJsonHeaders(),
       body: JSON.stringify(upstreamPayload),
       signal: controller.signal,
     });
@@ -256,7 +266,7 @@ export const clearHistory = async (req, res) => {
   try {
     const upstream = await fetch(FASTAPI_CHAT_HISTORY_URL, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: createJsonHeaders(),
       body: JSON.stringify({
         user_id: userId,
         chapter_name: chapterName,

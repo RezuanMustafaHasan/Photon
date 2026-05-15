@@ -9,11 +9,11 @@ from langchain_groq import ChatGroq
 from graph.llm_logging import invoke_llm_with_logging
 
 
-DEFAULT_EXAM_MODEL = "openai:gpt-5.4-nano"
+DEFAULT_EXAM_MODEL = "groq:openai/gpt-oss-120b"
 DEFAULT_EXAM_MODEL_CONFIG = {
     "id": DEFAULT_EXAM_MODEL,
-    "provider": "openai",
-    "model": "gpt-5.4-nano",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
 }
 INVALID_JSON_BACKSLASH_PATTERN = re.compile(r'(?<!\\)\\(?!["\\/bfnrtu])')
 LATEX_COMMAND_BACKSLASH_PATTERN = re.compile(
@@ -49,7 +49,7 @@ def parse_exam_model_config(selected_model=None):
         provider = provider.strip().lower()
         model = model.strip()
 
-    if provider in {"openai", "groq"} and model:
+    if provider == "groq" and model:
         return {
             "id": f"{provider}:{model}",
             "provider": provider,
@@ -64,26 +64,11 @@ def resolve_exam_model_id(selected_model=None):
 
 
 def get_missing_exam_model_key_message(selected_model=None):
-    provider = parse_exam_model_config(selected_model)["provider"]
-    if provider == "openai":
-        return "OPENAI_API_KEY is not set"
     return "GROQ_API_KEY is not set"
 
 
 def get_exam_llm(selected_model=None):
     model_config = parse_exam_model_config(selected_model)
-
-    if model_config["provider"] == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return None
-
-        try:
-            from langchain_openai import ChatOpenAI
-        except (ImportError, ModuleNotFoundError) as exc:
-            raise ValueError("langchain-openai is not installed") from exc
-
-        return ChatOpenAI(model=model_config["model"], api_key=api_key, temperature=0)
 
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:

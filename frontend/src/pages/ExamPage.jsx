@@ -16,7 +16,7 @@ const MAX_QUESTION_COUNT = 50;
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 const BANGLA_REGEX = /[\u0980-\u09FF]/;
 const EXAM_MODEL_STORAGE_KEY = 'photon_exam_model';
-const DEFAULT_EXAM_MODEL = 'openai:gpt-5.4-nano';
+const DEFAULT_EXAM_MODEL = 'groq:openai/gpt-oss-120b';
 
 const normalizeExamModel = (value) => {
   if (CHAT_MODEL_OPTIONS.some((option) => option.value === value)) {
@@ -25,7 +25,7 @@ const normalizeExamModel = (value) => {
 
   if (typeof value === 'string') {
     const normalized = value.trim();
-    if (/^(openai|groq):.+$/i.test(normalized)) {
+    if (/^groq:.+$/i.test(normalized)) {
       return normalized;
     }
   }
@@ -859,7 +859,7 @@ const ExamPage = () => {
                 ))}
               </select>
               <div className="small text-secondary mt-2">
-                Default: OpenAI · GPT-5.4 Nano
+                Default: Groq · GPT OSS 120B
               </div>
             </div>
 

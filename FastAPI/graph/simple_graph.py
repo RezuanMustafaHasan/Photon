@@ -112,7 +112,26 @@ LESSON_FLOW_SYSTEM_PROMPT = (
     "- Do not say the request is unclear.\n"
     "- Never mention any figure or diagram serial number such as চিত্র 2.6 or Figure 3.1.\n"
     "- Explain figure-related ideas in plain words; do not ask the student to look at a figure here.\n"
-    "- When writing formulas or symbols, always use Markdown math delimiters: inline $...$ and block $$...$$."
+    "- When writing formulas or symbols, always use Markdown math delimiters: inline $...$ and block $$...$$.\n"
+    "- Write units in plain text when possible, for example kg m^2 s^-1. Do not use LaTeX spacing commands like \\!, \\quad, or \\qquad.\n"
+)
+LESSON_FLOW_JSON_RETRY_SYSTEM_PROMPT = (
+    "You are repairing a tutor response for a Bangladeshi HSC physics app.\n"
+    "Return valid JSON only, with no markdown fences and no commentary.\n"
+    "Use exactly this schema:\n"
+    "{\n"
+    '  "textbook_answer": "compact markdown teaching explanation",\n'
+    '  "extra_explanation": "optional short intuition or empty string",\n'
+    '  "check_question": "one short check question or unsolved practice problem"\n'
+    "}\n"
+    "Strict rules:\n"
+    "- Regenerate from scratch. Do not copy the invalid previous response.\n"
+    "- Keep the whole JSON response under 1200 characters.\n"
+    "- Use at most one displayed equation.\n"
+    "- Escape JSON strings correctly.\n"
+    "- Do not use LaTeX spacing commands such as \\!, \\quad, or \\qquad.\n"
+    "- Write units in plain text like kg m^2 s^-1 when possible.\n"
+    "- check_question must contain only one focused question or one unsolved practice problem."
 )
 LESSON_FLOW_QUESTION_SYSTEM_PROMPT = (
     "You are a Bangladeshi HSC physics tutor handling a student's follow-up question while a lesson topic is in progress.\n"
@@ -351,7 +370,7 @@ def parse_chat_model_config(selected_model=None):
         provider = provider.strip().lower()
         model = model.strip()
 
-    if provider in {"openai", "groq"} and model:
+    if provider == "groq" and model:
         return {
             "id": f"{provider}:{model}",
             "provider": provider,
@@ -370,26 +389,11 @@ def resolve_chat_model_config(selected_model=None):
 
 
 def get_missing_chat_model_key_message(selected_model=None):
-    provider = resolve_chat_model_config(selected_model)["provider"]
-    if provider == "openai":
-        return "OPENAI_API_KEY is not set"
     return "GROQ_API_KEY is not set"
 
 
 def get_llm(selected_model=None):
     model_config = resolve_chat_model_config(selected_model)
-
-    if model_config["provider"] == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return None
-
-        try:
-            from langchain_openai import ChatOpenAI
-        except (ImportError, ModuleNotFoundError) as exc:
-            raise ValueError("langchain-openai is not installed") from exc
-
-        return ChatOpenAI(model=model_config["model"], api_key=api_key, temperature=0)
 
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -843,6 +847,38 @@ def parse_teaching_response(raw_content):
         "extra_explanation": extra_explanation,
         "check_question": check_question,
     }
+
+
+def invoke_teaching_llm_for_json(llm, messages, context, metadata=None, retry_user_prompt=""):
+    response = invoke_llm_with_logging(
+        llm,
+        messages,
+        context=context,
+        metadata=metadata,
+    )
+
+    try:
+        return parse_teaching_response(response.content)
+    except ValueError as exc:
+        repair_prompt = (
+            "The previous response was invalid JSON and could not be used.\n"
+            f"Parser error: {exc}\n\n"
+            "Regenerate the answer from scratch for this original task:\n\n"
+            f"{retry_user_prompt}"
+        )
+        retry_response = invoke_llm_with_logging(
+            llm,
+            [
+                SystemMessage(content=LESSON_FLOW_JSON_RETRY_SYSTEM_PROMPT),
+                HumanMessage(content=repair_prompt),
+            ],
+            context=f"{context}.retry_json",
+            metadata={
+                **(metadata or {}),
+                "retry_reason": str(exc)[:200],
+            },
+        )
+        return parse_teaching_response(retry_response.content)
 
 
 def safe_int(value, default=0):
@@ -1903,37 +1939,37 @@ def teach_lesson_concept(
     next_step_hint="",
     extra_image_hint="",
 ):
+    user_prompt = build_lesson_flow_prompt(
+        chapter_name=chapter_name,
+        lesson_name=lesson_name,
+        concept=concept,
+        student_reply=student_reply,
+        previous_question=previous_question,
+        re_explain=re_explain,
+    )
+    metadata = {
+        "chat_model": resolve_chat_model_id(chat_model),
+        "chapter_name": chapter_name,
+        "lesson_name": lesson_name,
+        "concept_index": concept.get("concept_index"),
+        "re_explain": re_explain,
+    }
     messages = [
         SystemMessage(content=LESSON_FLOW_SYSTEM_PROMPT),
-        HumanMessage(
-            content=build_lesson_flow_prompt(
-                chapter_name=chapter_name,
-                lesson_name=lesson_name,
-                concept=concept,
-                student_reply=student_reply,
-                previous_question=previous_question,
-                re_explain=re_explain,
-            )
-        ),
+        HumanMessage(content=user_prompt),
     ]
 
     try:
-        response = invoke_llm_with_logging(
+        parsed = invoke_teaching_llm_for_json(
             llm,
             messages,
             context="simple_graph.teach_lesson_concept",
-            metadata={
-                "chat_model": resolve_chat_model_id(chat_model),
-                "chapter_name": chapter_name,
-                "lesson_name": lesson_name,
-                "concept_index": concept.get("concept_index"),
-                "re_explain": re_explain,
-            },
+            metadata=metadata,
+            retry_user_prompt=user_prompt,
         )
     except Exception as exc:
         raise ValueError(normalize_error_message(exc)) from exc
 
-    parsed = parse_teaching_response(response.content)
     check_question = avoid_repeated_check_question(
         parsed["check_question"],
         concept,
@@ -2000,35 +2036,35 @@ def answer_lesson_flow_question(
     used_image_ids=None,
     next_step_hint="",
 ):
+    user_prompt = build_lesson_flow_question_prompt(
+        chapter_name=chapter_name,
+        lesson_name=lesson_name,
+        concept=concept,
+        student_question=student_question,
+        previous_question=previous_question,
+    )
+    metadata = {
+        "chat_model": resolve_chat_model_id(chat_model),
+        "chapter_name": chapter_name,
+        "lesson_name": lesson_name,
+        "concept_index": concept.get("concept_index"),
+    }
     messages = [
         SystemMessage(content=LESSON_FLOW_QUESTION_SYSTEM_PROMPT),
-        HumanMessage(
-            content=build_lesson_flow_question_prompt(
-                chapter_name=chapter_name,
-                lesson_name=lesson_name,
-                concept=concept,
-                student_question=student_question,
-                previous_question=previous_question,
-            )
-        ),
+        HumanMessage(content=user_prompt),
     ]
 
     try:
-        response = invoke_llm_with_logging(
+        parsed = invoke_teaching_llm_for_json(
             llm,
             messages,
             context="simple_graph.answer_lesson_flow_question",
-            metadata={
-                "chat_model": resolve_chat_model_id(chat_model),
-                "chapter_name": chapter_name,
-                "lesson_name": lesson_name,
-                "concept_index": concept.get("concept_index"),
-            },
+            metadata=metadata,
+            retry_user_prompt=user_prompt,
         )
     except Exception as exc:
         raise ValueError(normalize_error_message(exc)) from exc
 
-    parsed = parse_teaching_response(response.content)
     practice_request = is_practice_request(student_question)
     if practice_request:
         check_question = remove_practice_answer_sections(parsed["check_question"]) or parsed["check_question"]

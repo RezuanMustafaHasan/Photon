@@ -254,12 +254,18 @@ class SimpleGraphTests(unittest.TestCase):
 
         self.assertEqual(parsed["check_question"], "বিভব কী?")
 
-    def test_resolve_chat_model_config_accepts_provider_prefixed_models(self):
+    def test_resolve_chat_model_config_accepts_groq_provider_prefixed_models(self):
+        config = resolve_chat_model_config("groq:openai/gpt-oss-120b")
+
+        self.assertEqual(config["id"], "groq:openai/gpt-oss-120b")
+        self.assertEqual(config["provider"], "groq")
+        self.assertEqual(config["model"], "openai/gpt-oss-120b")
+
+    def test_resolve_chat_model_config_rejects_openai_models(self):
         config = resolve_chat_model_config("openai:gpt-5.4-nano")
 
-        self.assertEqual(config["id"], "openai:gpt-5.4-nano")
-        self.assertEqual(config["provider"], "openai")
-        self.assertEqual(config["model"], "gpt-5.4-nano")
+        self.assertEqual(config["id"], "groq:openai/gpt-oss-120b")
+        self.assertEqual(config["provider"], "groq")
 
     def test_extract_figure_hints_prefers_figure_titles(self):
         hints = extract_figure_hints(
@@ -1030,10 +1036,10 @@ class SimpleGraphTests(unittest.TestCase):
             [SAMPLE_LESSON, SECOND_LESSON],
             [],
             "বল কমে কেন?",
-            chat_model="openai:gpt-4.1-mini",
+            chat_model="groq:openai/gpt-oss-120b",
         )
 
-        mock_get_llm.assert_called_with("openai:gpt-4.1-mini")
+        mock_get_llm.assert_called_with("groq:openai/gpt-oss-120b")
 
     @patch("graph.simple_graph.load_images_from_database")
     @patch("graph.simple_graph.get_llm")

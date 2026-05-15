@@ -260,8 +260,8 @@ test('chat controller forwards the selected chat model to the upstream service',
   const token = createToken('model-user');
 
   await sendChat(app, token, 'spoofed-user', {
-    chatModel: 'openai:gpt-4.1-mini',
+    chatModel: 'groq:openai/gpt-oss-120b',
   }).expect(200);
 
-  assert.equal(forwardedBody.chat_model, 'openai:gpt-4.1-mini');
+  assert.equal(forwardedBody.chat_model, 'groq:openai/gpt-oss-120b');
 });

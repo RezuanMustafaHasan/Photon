@@ -2,13 +2,14 @@ import mongoose from 'mongoose';
 import ExamAttempt from '../models/ExamAttempt.js';
 import { recordExamMastery } from '../util/mastery.js';
 import { refreshRevisionTasks } from '../util/revision.js';
+import { createJsonHeaders } from '../util/security.js';
 
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 const FASTAPI_EXAM_URL = `${FASTAPI_BASE_URL}/exam/generate`;
 const FASTAPI_ANALYZE_URL = `${FASTAPI_BASE_URL}/exam/analyze`;
 const MIN_QUESTION_COUNT = 1;
 const MAX_QUESTION_COUNT = 50;
-const DEFAULT_EXAM_MODEL = 'openai:gpt-5.4-nano';
+const DEFAULT_EXAM_MODEL = 'groq:openai/gpt-oss-120b';
 
 const logBestEffortError = (label, error) => {
   if (error?.name === 'MongoClientClosedError') {
@@ -69,7 +70,7 @@ const sanitizeExamModel = (rawModel) => {
     return DEFAULT_EXAM_MODEL;
   }
 
-  if (/^(openai|groq):.+$/i.test(value)) {
+  if (/^groq:.+$/i.test(value)) {
     return value;
   }
 
@@ -255,7 +256,7 @@ export const generateExam = async (req, res) => {
   try {
     const upstream = await fetch(FASTAPI_EXAM_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: createJsonHeaders(),
       body: JSON.stringify({ selections, questionCount, examModel }),
       signal: controller.signal,
     });
@@ -319,7 +320,7 @@ export const completeExam = async (req, res) => {
     try {
       const upstream = await fetch(FASTAPI_ANALYZE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createJsonHeaders(),
         body: JSON.stringify({
           selections,
           questionCount,

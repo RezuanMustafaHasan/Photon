@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import createAuthRouter from './routes/authRoutes.js';
 import createChatRouter from './routes/chatRoutes.js';
 import createChapterRouter from './routes/chapterRoutes.js';
@@ -7,6 +8,7 @@ import createExamRouter from './routes/examRoutes.js';
 import createMasteryRouter from './routes/masteryRoutes.js';
 import createRevisionRouter from './routes/revisionRoutes.js';
 import { createRateLimiters } from './middleware/rateLimiters.js';
+import { createCorsOptions } from './util/security.js';
 
 const parseTrustProxy = (value) => {
   if (value === undefined || value === null || value === '') {
@@ -38,7 +40,8 @@ export const createApp = ({ rateLimit = {} } = {}) => {
   });
 
   app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
-  app.use(cors({ origin: true }));
+  app.use(helmet());
+  app.use(cors(createCorsOptions()));
   app.use(express.json());
 
   app.get('/', (_req, res) => {

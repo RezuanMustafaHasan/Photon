@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import connectDB from './util/db.js';
 import createApp from './app.js';
 import { connectRedis, isRateLimitEnabled } from './util/redisClient.js';
+import { getFastApiInternalApiKey } from './util/security.js';
 
 dotenv.config();
 
@@ -9,6 +10,8 @@ const PORT = process.env.PORT || 5000;
 const rateLimitEnabled = isRateLimitEnabled();
 
 const startServer = async () => {
+  getFastApiInternalApiKey();
+
   const redisPromise = rateLimitEnabled
     ? connectRedis({ required: true })
     : Promise.resolve(null);

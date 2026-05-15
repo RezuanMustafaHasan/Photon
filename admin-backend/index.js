@@ -1,11 +1,13 @@
 const cors = require('cors');
 const dotenv = require('dotenv');
 const express = require('express');
+const helmet = require('helmet');
 const fs = require('fs/promises');
 const path = require('path');
 const mongoose = require('mongoose');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
+const { rateLimit } = require('express-rate-limit');
 const { v2: cloudinary } = require('cloudinary');
 
 dotenv.config();
@@ -22,6 +24,61 @@ const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
 const CLOUDINARY_FOLDER = process.env.CLOUDINARY_FOLDER || 'photon/lesson-images';
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'admin_dev_secret_change_me';
 const ADMIN_JWT_EXPIRES_IN = process.env.ADMIN_JWT_EXPIRES_IN || '8h';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER_SERVICE_TYPE);
+const MIN_SECRET_LENGTH = 32;
+
+const parseCsv = (value) => String(value || '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+
+const createCorsOptions = () => {
+  const configuredOrigins = parseCsv(process.env.ADMIN_CORS_ORIGINS || process.env.CORS_ORIGINS || process.env.ADMIN_FRONTEND_ORIGIN);
+  const allowedOrigins = configuredOrigins.length
+    ? configuredOrigins
+    : [
+        'http://localhost:5174',
+        'http://127.0.0.1:5174',
+      ];
+
+  if (IS_PRODUCTION && !configuredOrigins.length) {
+    throw new Error('ADMIN_CORS_ORIGINS must be set in production.');
+  }
+
+  return {
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'));
+    },
+  };
+};
+
+const validateProductionEnvironment = () => {
+  if (!IS_PRODUCTION) {
+    return;
+  }
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI must be set in production.');
+  }
+
+  if (!ADMIN_JWT_SECRET || ADMIN_JWT_SECRET === 'admin_dev_secret_change_me' || ADMIN_JWT_SECRET.length < MIN_SECRET_LENGTH) {
+    throw new Error(`ADMIN_JWT_SECRET must be set to a unique value with at least ${MIN_SECRET_LENGTH} characters in production.`);
+  }
+
+  const hasJsonAccounts = Boolean(String(process.env.ADMIN_ACCOUNTS_JSON || '').trim());
+  const hasExplicitAccount = Boolean(String(process.env.ADMIN_EMAIL || '').trim()) && Boolean(String(process.env.ADMIN_PASSWORD || '').trim());
+  if (!hasJsonAccounts && !hasExplicitAccount) {
+    throw new Error('ADMIN_ACCOUNTS_JSON or ADMIN_EMAIL plus ADMIN_PASSWORD must be set in production.');
+  }
+
+  if (String(process.env.ADMIN_PASSWORD || '') === 'admin12345') {
+    throw new Error('ADMIN_PASSWORD must not use the development default in production.');
+  }
+};
 
 const jsonUpload = multer({
   storage: multer.memoryStorage(),
@@ -38,7 +95,8 @@ const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+    const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+    if (!allowedMimeTypes.has(file.mimetype)) {
       return cb(new Error('Only image files are allowed'));
     }
     cb(null, true);
@@ -53,8 +111,20 @@ if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
   });
 }
 
-app.use(cors());
+validateProductionEnvironment();
+
+app.set('trust proxy', process.env.TRUST_PROXY || (IS_PRODUCTION ? 1 : false));
+app.use(helmet());
+app.use(cors(createCorsOptions()));
 app.use(express.json({ limit: '10mb' }));
+
+const adminAuthLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many sign-in attempts. Please wait before trying again.' },
+});
 
 let connectPromise;
 
@@ -382,7 +452,7 @@ const deleteImageFromCloudinary = async (publicId) => {
   return cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
 };
 
-app.post('/api/admin/auth/login', async (req, res) => {
+app.post('/api/admin/auth/login', adminAuthLimiter, async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
 
